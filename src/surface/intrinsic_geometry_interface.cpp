@@ -12,7 +12,7 @@ namespace geometrycentral {
 namespace surface {
 
 // clang-format off
-IntrinsicGeometryInterface::IntrinsicGeometryInterface(HalfedgeMesh& mesh_) : 
+IntrinsicGeometryInterface::IntrinsicGeometryInterface(SurfaceMesh& mesh_) : 
   BaseGeometryInterface(mesh_), 
 
   edgeLengthsQ              (&edgeLengths,                  std::bind(&IntrinsicGeometryInterface::computeEdgeLengths, this),               quantities),
@@ -25,6 +25,8 @@ IntrinsicGeometryInterface::IntrinsicGeometryInterface(HalfedgeMesh& mesh_) :
   faceGaussianCurvaturesQ   (&faceGaussianCurvatures,       std::bind(&IntrinsicGeometryInterface::computeFaceGaussianCurvatures, this),    quantities),
   halfedgeCotanWeightsQ     (&halfedgeCotanWeights,         std::bind(&IntrinsicGeometryInterface::computeHalfedgeCotanWeights, this),      quantities),
   edgeCotanWeightsQ         (&edgeCotanWeights,             std::bind(&IntrinsicGeometryInterface::computeEdgeCotanWeights, this),          quantities),
+  shapeLengthScaleQ         (&shapeLengthScale,             std::bind(&IntrinsicGeometryInterface::computeShapeLengthScale, this),          quantities),
+  meshLengthScaleQ          (&meshLengthScale,              std::bind(&IntrinsicGeometryInterface::computeMeshLengthScale, this),          quantities),
   
   halfedgeVectorsInFaceQ            (&halfedgeVectorsInFace,            std::bind(&IntrinsicGeometryInterface::computeHalfedgeVectorsInFace, this),             quantities),
   transportVectorsAcrossHalfedgeQ   (&transportVectorsAcrossHalfedge,   std::bind(&IntrinsicGeometryInterface::computeTransportVectorsAcrossHalfedge, this),    quantities),
@@ -35,6 +37,8 @@ IntrinsicGeometryInterface::IntrinsicGeometryInterface(HalfedgeMesh& mesh_) :
   vertexLumpedMassMatrixQ       (&vertexLumpedMassMatrix,       std::bind(&IntrinsicGeometryInterface::computeVertexLumpedMassMatrix, this),        quantities),
   vertexGalerkinMassMatrixQ     (&vertexGalerkinMassMatrix,     std::bind(&IntrinsicGeometryInterface::computeVertexGalerkinMassMatrix, this),      quantities),
   vertexConnectionLaplacianQ    (&vertexConnectionLaplacian,    std::bind(&IntrinsicGeometryInterface::computeVertexConnectionLaplacian, this),     quantities),
+  faceGalerkinMassMatrixQ       (&faceGalerkinMassMatrix,       std::bind(&IntrinsicGeometryInterface::computeFaceGalerkinMassMatrix, this),        quantities),
+  faceConnectionLaplacianQ      (&faceConnectionLaplacian,      std::bind(&IntrinsicGeometryInterface::computeFaceConnectionLaplacian, this),       quantities),
 
 
   // DEC operators need some extra work since 8 members are grouped under one require
@@ -236,38 +240,52 @@ void IntrinsicGeometryInterface::computeEdgeCotanWeights() {
   for (Edge e : mesh.edges()) {
     // WARNING: Logic duplicated between cached and immediate version
     double cotSum = 0.;
-
-    { // First halfedge-- always real
-      Halfedge he = e.halfedge();
+    for (Halfedge he : e.adjacentInteriorHalfedges()) {
+      Halfedge heFirst = he;
       double l_ij = edgeLengths[he.edge()];
       he = he.next();
       double l_jk = edgeLengths[he.edge()];
       he = he.next();
       double l_ki = edgeLengths[he.edge()];
       he = he.next();
-      GC_SAFETY_ASSERT(he == e.halfedge(), "faces mush be triangular");
+      GC_SAFETY_ASSERT(he == heFirst, "faces mush be triangular");
       double area = faceAreas[he.face()];
       double cotValue = (-l_ij * l_ij + l_jk * l_jk + l_ki * l_ki) / (4. * area);
       cotSum += cotValue / 2;
     }
-
-    if (e.halfedge().twin().isInterior()) { // Second halfedge
-      Halfedge he = e.halfedge().twin();
-      double l_ij = edgeLengths[he.edge()];
-      he = he.next();
-      double l_jk = edgeLengths[he.edge()];
-      he = he.next();
-      double l_ki = edgeLengths[he.edge()];
-      double area = faceAreas[he.face()];
-      double cotValue = (-l_ij * l_ij + l_jk * l_jk + l_ki * l_ki) / (4. * area);
-      cotSum += cotValue / 2;
-    }
-
     edgeCotanWeights[e] = cotSum;
   }
 }
 void IntrinsicGeometryInterface::requireEdgeCotanWeights() { edgeCotanWeightsQ.require(); }
 void IntrinsicGeometryInterface::unrequireEdgeCotanWeights() { edgeCotanWeightsQ.unrequire(); }
+
+// Shape length scale
+void IntrinsicGeometryInterface::computeShapeLengthScale() {
+  faceAreasQ.ensureHave();
+
+  double totalArea = 0.;
+  for (Face f : mesh.faces()) {
+    totalArea += faceAreas[f];
+  }
+
+  shapeLengthScale = std::sqrt(totalArea);
+}
+void IntrinsicGeometryInterface::requireShapeLengthScale() { shapeLengthScaleQ.require(); }
+void IntrinsicGeometryInterface::unrequireShapeLengthScale() { shapeLengthScaleQ.unrequire(); }
+
+// Mesh length scale
+void IntrinsicGeometryInterface::computeMeshLengthScale() {
+  edgeLengthsQ.ensureHave();
+
+  double totalEdgeLength = 0.;
+  for (Edge e : mesh.edges()) {
+    totalEdgeLength += edgeLengths[e];
+  }
+
+  meshLengthScale = totalEdgeLength / mesh.nEdges();
+}
+void IntrinsicGeometryInterface::requireMeshLengthScale() { meshLengthScaleQ.require(); }
+void IntrinsicGeometryInterface::unrequireMeshLengthScale() { meshLengthScaleQ.unrequire(); }
 
 
 // Halfedge vectors in face
@@ -348,6 +366,11 @@ void IntrinsicGeometryInterface::unrequireTransportVectorsAcrossHalfedge() {
 
 // Halfedge vectors in vertex
 void IntrinsicGeometryInterface::computeHalfedgeVectorsInVertex() {
+
+  if (!mesh.usesImplicitTwin()) {
+    throw std::runtime_error("ERROR: Tangent spaces not implemented for general SurfaceMesh, use ManifoldSurfaceMesh");
+  }
+
   edgeLengthsQ.ensureHave();
   cornerScaledAnglesQ.ensureHave();
 
@@ -407,7 +430,7 @@ void IntrinsicGeometryInterface::computeCotanLaplacian() {
   for (Edge e : mesh.edges()) {
     Halfedge he = e.halfedge();
     Vertex vTail = he.vertex();
-    Vertex vHead = he.twin().vertex();
+    Vertex vHead = he.next().vertex();
 
     size_t iVHead = vertexIndices[vHead];
     size_t iVTail = vertexIndices[vTail];
@@ -481,6 +504,23 @@ void IntrinsicGeometryInterface::computeVertexGalerkinMassMatrix() {
 void IntrinsicGeometryInterface::requireVertexGalerkinMassMatrix() { vertexGalerkinMassMatrixQ.require(); }
 void IntrinsicGeometryInterface::unrequireVertexGalerkinMassMatrix() { vertexGalerkinMassMatrixQ.unrequire(); }
 
+// Face Galerkin mass matrix
+void IntrinsicGeometryInterface::computeFaceGalerkinMassMatrix() {
+  faceIndicesQ.ensureHave();
+  faceAreasQ.ensureHave();
+
+  std::vector<Eigen::Triplet<double>> triplets;
+  for (Face f : mesh.faces()) {
+    size_t i = faceIndices[f];
+    triplets.emplace_back(i, i, faceAreas[f]);
+  }
+
+  faceGalerkinMassMatrix = Eigen::SparseMatrix<double>(mesh.nFaces(), mesh.nFaces());
+  faceGalerkinMassMatrix.setFromTriplets(triplets.begin(), triplets.end());
+}
+void IntrinsicGeometryInterface::requireFaceGalerkinMassMatrix() { faceGalerkinMassMatrixQ.require(); }
+void IntrinsicGeometryInterface::unrequireFaceGalerkinMassMatrix() { faceGalerkinMassMatrixQ.unrequire(); }
+
 
 // Vertex connection Laplacian
 void IntrinsicGeometryInterface::computeVertexConnectionLaplacian() {
@@ -493,11 +533,10 @@ void IntrinsicGeometryInterface::computeVertexConnectionLaplacian() {
   for (Halfedge he : mesh.halfedges()) {
 
     size_t iTail = vertexIndices[he.vertex()];
-    size_t iTip = vertexIndices[he.twin().vertex()];
+    size_t iTip = vertexIndices[he.next().vertex()];
 
     double weight = edgeCotanWeights[he.edge()];
     Vector2 rot = transportVectorsAlongHalfedge[he.twin()];
-
     triplets.emplace_back(iTail, iTail, weight);
     triplets.emplace_back(iTail, iTip, -weight * rot);
   }
@@ -507,6 +546,41 @@ void IntrinsicGeometryInterface::computeVertexConnectionLaplacian() {
 }
 void IntrinsicGeometryInterface::requireVertexConnectionLaplacian() { vertexConnectionLaplacianQ.require(); }
 void IntrinsicGeometryInterface::unrequireVertexConnectionLaplacian() { vertexConnectionLaplacianQ.unrequire(); }
+
+// Face connection Laplacian
+void IntrinsicGeometryInterface::computeFaceConnectionLaplacian() {
+  faceIndicesQ.ensureHave();
+  transportVectorsAcrossHalfedgeQ.ensureHave();
+
+  std::vector<Eigen::Triplet<std::complex<double>>> triplets;
+  for (Face f : mesh.faces()) {
+    size_t i = faceIndices[f];
+
+    std::complex<double> weightISum = 0;
+    for (Halfedge he : f.adjacentHalfedges()) {
+
+      if (!he.twin().isInterior()) {
+        continue;
+      }
+
+      Face neighFace = he.twin().face();
+      unsigned int j = faceIndices[neighFace];
+
+      // LC connection between the faces
+      Vector2 rot = transportVectorsAcrossHalfedge[he.twin()];
+      double weight = 1; // FIXME TODO figure out weights
+      triplets.emplace_back(i, j, -weight * rot);
+
+      weightISum += weight;
+    }
+
+    triplets.emplace_back(i, i, weightISum);
+  }
+  faceConnectionLaplacian = Eigen::SparseMatrix<std::complex<double>>(mesh.nFaces(), mesh.nFaces());
+  faceConnectionLaplacian.setFromTriplets(triplets.begin(), triplets.end());
+}
+void IntrinsicGeometryInterface::requireFaceConnectionLaplacian() { faceConnectionLaplacianQ.require(); }
+void IntrinsicGeometryInterface::unrequireFaceConnectionLaplacian() { faceConnectionLaplacianQ.unrequire(); }
 
 
 void IntrinsicGeometryInterface::computeDECOperators() {
@@ -571,7 +645,7 @@ void IntrinsicGeometryInterface::computeDECOperators() {
       size_t iEdge = edgeIndices[e];
       Halfedge he = e.halfedge();
       Vertex vTail = he.vertex();
-      Vertex vHead = he.twin().vertex();
+      Vertex vHead = he.next().vertex();
 
       size_t iVHead = vertexIndices[vHead];
       tripletList.emplace_back(iEdge, iVHead, 1.0);

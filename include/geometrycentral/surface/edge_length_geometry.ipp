@@ -21,6 +21,16 @@ inline double EdgeLengthGeometry::faceArea(Face f) const {
   return area;
 }
 
+// Vertex dual areas
+inline double EdgeLengthGeometry::vertexDualArea(Vertex v) const {
+  // WARNING: Logic duplicated between cached and immediate version
+   double area = 0.;
+   for( Face f : v.adjacentFaces() ) {
+      area += faceArea(f);
+   }
+   return area/3.;
+}
+
 // Corner angles
 inline double EdgeLengthGeometry::cornerAngle(Corner c) const {
   // WARNING: Logic duplicated between cached and immediate version
@@ -63,8 +73,27 @@ inline double EdgeLengthGeometry::halfedgeCotanWeight(Halfedge heI) const {
   }
 }
 
+inline double EdgeLengthGeometry::vertexGaussianCurvature(Vertex v) const {
+  // WARNING: Logic duplicated between cached and immediate version
+
+   // the triangles neighboring any boundary vertex can be flattened into
+   // the plane without any stretching/distortion; hence, a boundary
+   // vertex has no Gaussian curvature
+   if( v.isBoundary() ) return 0.;
+
+   double gaussianCurvature = 2.*PI;
+   for (Corner c : v.adjacentCorners() ) {
+      gaussianCurvature -= cornerAngle(c);
+   }
+   return gaussianCurvature;
+}
+
 inline double EdgeLengthGeometry::edgeCotanWeight(Edge e) const {
-  return halfedgeCotanWeight(e.halfedge()) + halfedgeCotanWeight(e.halfedge().twin());
+  double sum = 0;
+  for (Halfedge he : e.adjacentInteriorHalfedges()) {
+    sum += halfedgeCotanWeight(he);
+  }
+  return sum;
 }
 
 } // namespace surface

@@ -19,6 +19,7 @@ if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STR
   # using Clang (linux or apple) or GCC
   message("Using clang/gcc compiler flags")
   SET(BASE_CXX_FLAGS "-std=c++11 -Wall -Wextra -Werror -g3")
+  SET(CMAKE_CXX_FLAGS_DEBUG          "")
   SET(DISABLED_WARNINGS " -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function -Wno-deprecated-declarations -Wno-missing-braces -Wno-unused-private-field")
   SET(TRACE_INCLUDES " -H -Wno-error=unused-command-line-argument")
 
@@ -33,7 +34,7 @@ if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STR
   endif()
 
   SET(CMAKE_CXX_FLAGS "${BASE_CXX_FLAGS} ${DISABLED_WARNINGS}")
-  SET(CMAKE_CXX_FLAGS_DEBUG          "-g3")
+  SET(CMAKE_CXX_FLAGS_DEBUG          "${CMAKE_CXX_FLAGS_DEBUG} -g3")
   SET(CMAKE_CXX_FLAGS_RELEASE        "-O3 -march=native -DNDEBUG")
 
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
@@ -91,9 +92,11 @@ add_definitions(-DGC_TEST_ASSETS_ABS_PATH=\"${ABS_ASSETS_DIR}\")
 set(TEST_SRCS
   src/main_test.cpp
   src/load_test_meshes.cpp
+  src/eigen_interop_helpers_test.cpp
   src/halfedge_mesh_test.cpp
   src/halfedge_mutation_test.cpp
   src/halfedge_geometry_test.cpp
+  src/surface_misc_test.cpp
   src/linear_algebra_test.cpp
 )
 
@@ -107,4 +110,3 @@ add_subdirectory(../ "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
 if(GC_HAVE_SUITESPARSE)
     add_definitions(-DGC_HAVE_SUITESPARSE)
 endif()
-

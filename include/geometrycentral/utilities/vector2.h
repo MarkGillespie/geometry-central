@@ -57,6 +57,8 @@ struct Vector2 {
   // The non-member functions below return a new object; they do not modify in-place.
 
   Vector2 normalize() const;
+  Vector2 normalizeCutoff(double mag = 0.) const;
+  Vector2 unit() const; // alias for normalize
   Vector2 rotate(double theta) const;
   Vector2 rotate90() const;
 
@@ -81,18 +83,20 @@ Vector2 operator*(const T s, const Vector2& v);
 ::std::istream& operator<<(std::istream& input, Vector2& v);
 
 // Notice that all of these functions return a new vector when applicable.
-// The member functions above modify in place
 
 double arg(const Vector2& v);
 double norm(const Vector2& v);
 double norm2(const Vector2& v);
 
 double angle(const Vector2& u, const Vector2& v);
+double orientedAngle(const Vector2& u, const Vector2& v);
 double dot(const Vector2& u, const Vector2& v);
 double cross(const Vector2& u, const Vector2& v);
 Vector3 cross3(const Vector2& u, const Vector2& v); // assumes arguments are in x-y plane
 
 Vector2 unit(const Vector2& v);
+Vector2 normalize(const Vector2& v);
+Vector2 normalizeCutoff(const Vector2& v, double mag = 0.);
 Vector2 clamp(const Vector2& val, const Vector2& low, const Vector2& high);
 
 bool isfinite(const Vector2& u); // break camel case rule to match std

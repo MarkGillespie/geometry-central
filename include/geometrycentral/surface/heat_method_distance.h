@@ -1,14 +1,12 @@
 #pragma once
 
-#include "geometrycentral/utilities/vector3.h"
-
-#include "geometrycentral/utilities/vector2.h"
-
-#include "geometrycentral/surface/halfedge_mesh.h"
-#include "geometrycentral/surface/surface_point.h"
-#include "geometrycentral/surface/intrinsic_geometry_interface.h"
-
 #include "geometrycentral/numerical/linear_solvers.h"
+#include "geometrycentral/surface/edge_length_geometry.h"
+#include "geometrycentral/surface/intrinsic_geometry_interface.h"
+#include "geometrycentral/surface/surface_mesh.h"
+#include "geometrycentral/surface/surface_point.h"
+#include "geometrycentral/utilities/vector2.h"
+#include "geometrycentral/utilities/vector3.h"
 
 namespace geometrycentral {
 namespace surface {
@@ -18,15 +16,11 @@ VertexData<double> heatMethodDistance(IntrinsicGeometryInterface& geom, Vertex v
 
 
 // Stateful class. Allows efficient repeated solves
-
-enum class ComputeTriangulation { Original = 0, IntrinsicDelaunay, IntrinsicDelaunayRefine };
-
 class HeatMethodDistanceSolver {
 
 public:
   // === Constructor
-  HeatMethodDistanceSolver(IntrinsicGeometryInterface& geom, double tCoef = 1.0);
-
+  HeatMethodDistanceSolver(IntrinsicGeometryInterface& geom, double tCoef = 1.0, bool useRobustLaplacian = false);
 
   // === Methods
 
@@ -42,33 +36,39 @@ public:
   // Solve for distance from a collection of surface points
   VertexData<double> computeDistance(const std::vector<SurfacePoint>& sourcePoints);
 
+  // Solve for distance from a custom right hand side
+  // (returns WITHOUT performing constant shift to 0)
+  Vector<double> computeDistanceRHS(const Vector<double>& rhs);
 
   // === Options and parameters
 
   const double tCoef; // the time parameter used for heat flow, measured as time = tCoef * mean_edge_length^2
                       // default: 1.0
-
-
-  // what triangulation to perform the computation on
-  // TODO not supported yet
-  const ComputeTriangulation computeTri = ComputeTriangulation::Original;
-
+  const bool useRobustLaplacian;
 
 private:
-  
   // === Members
 
-  // Basics
-  HalfedgeMesh& mesh;
+  // Input mesh and geometry
+  SurfaceMesh& mesh;
   IntrinsicGeometryInterface& geom;
 
+  // Tufted cover mesh & geometry (these will only be popualted if useRobustLaplacian = true)
+  std::unique_ptr<SurfaceMesh> tuftedMesh;
+  std::unique_ptr<EdgeLengthGeometry> tuftedIntrinsicGeom;
+
   // Parameters
-  double shortTime;   // the actual time used for heat flow computed from tCoef
+  double shortTime; // the actual time used for heat flow computed from tCoef
 
   // Solvers
   std::unique_ptr<PositiveDefiniteSolver<double>> heatSolver;
   std::unique_ptr<PositiveDefiniteSolver<double>> poissonSolver;
-  
+
+  // Helpers
+
+  // Return either the input mesh/geometry, or the tufted mesh/geometry, based on whether useRobustLaplacian=true
+  SurfaceMesh& getMesh();
+  IntrinsicGeometryInterface& getGeom();
 };
 
 

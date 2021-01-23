@@ -56,10 +56,11 @@ inline double norm(const Vector3& v) { return v.norm(); }
 inline double Vector3::norm2() const { return x * x + y * y + z * z; }
 inline double norm2(const Vector3& v) { return v.norm2(); }
 
-inline Vector3 unit(const Vector3& v) {
-  double n = norm(v);
-  return Vector3{v.x / n, v.y / n, v.z / n};
-}
+inline Vector3 normalize(const Vector3& v) { return v.normalize(); }
+
+inline Vector3 normalizeCutoff(const Vector3& v, double mag) { return v.normalizeCutoff(mag); }
+
+inline Vector3 unit(const Vector3& v) { return normalize(v); }
 
 inline Vector3 cross(const Vector3& u, const Vector3& v) {
   double x = u.y * v.z - u.z * v.y;
@@ -111,12 +112,12 @@ inline Vector3 componentwiseMax(const Vector3& u, const Vector3& v) {
 
 inline Vector3 Vector3::rotateAround(Vector3 axis, double theta) const {
   Vector3 thisV = {x, y, z};
-  Vector3 axisN = unit(axis);
+  Vector3 axisN = axis.normalize();
   Vector3 parallelComp = axisN * dot(thisV, axisN);
   Vector3 tangentComp = thisV - parallelComp;
 
   if (tangentComp.norm2() > 0.0) {
-    Vector3 basisX = unit(tangentComp);
+    Vector3 basisX = tangentComp.normalize();
     Vector3 basisY = cross(axisN, basisX);
 
     double tangentMag = tangentComp.norm();
@@ -133,8 +134,29 @@ inline Vector3 Vector3::normalize() const {
   return *this * r;
 }
 
+inline Vector3 Vector3::normalizeCutoff(double mag) const {
+  double len = std::sqrt(x * x + y * y + z * z);
+  if (len <= mag) len = 1.;
+  double r = 1. / len;
+  return *this * r;
+}
+
+inline Vector3 Vector3::unit() const { return normalize(); }
 
 inline Vector3 Vector3::removeComponent(const Vector3& unitDir) const { return *this - unitDir * dot(unitDir, *this); }
+
+inline std::array<Vector3, 2> Vector3::buildTangentBasis() const {
+  Vector3 unitDir = normalize();
+  Vector3 testVec{1., 0., 0.};
+  if (std::fabs(dot(testVec, unitDir)) > 0.9) {
+    testVec = Vector3{0., 1., 0.};
+  }
+
+  Vector3 basisX = cross(testVec, unitDir).normalize();
+  Vector3 basisY = cross(unitDir, basisX).normalize();
+
+  return std::array<Vector3, 2>{basisX, basisY};
+};
 
 inline std::ostream& operator<<(std::ostream& output, const Vector3& v) {
   output << "<" << v.x << ", " << v.y << ", " << v.z << ">";
