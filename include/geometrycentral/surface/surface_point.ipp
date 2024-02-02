@@ -329,7 +329,7 @@ inline Edge sharedEdge(const SurfacePoint& pA, const SurfacePoint& pB) {
     switch (pB.type) {
     case SurfacePointType::Vertex:
       for (Edge e : pB.vertex.adjacentEdges()) {
-        if (e == pB.edge) return e;
+        if (e == pA.edge) return e;
       }
       break;
     case SurfacePointType::Edge:

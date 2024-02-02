@@ -46,6 +46,8 @@ add_subdirectory(deps)
 
 # copy variables set by deps upward
 SET(GC_HAVE_SUITESPARSE ${GC_HAVE_SUITESPARSE} PARENT_SCOPE)
+SET(SUITESPARSE_INCLUDE_DIRS ${SUITESPARSE_INCLUDE_DIRS} PARENT_SCOPE)
+SET(SUITESPARSE_LIBRARIES ${SUITESPARSE_LIBRARIES} PARENT_SCOPE)
 
 ### Recurse to the source code
 add_subdirectory(src)

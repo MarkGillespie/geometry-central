@@ -25,7 +25,7 @@ inline Vector2 barycentricDisplacementToCartesian(const std::array<Vector2, 3>& 
   return vertCoords[0] * baryVec.x + vertCoords[1] * baryVec.y + vertCoords[2] * baryVec.z;
 }
 
-inline Vector3 cartesianVectorToBarycentric(const std::array<Vector2, 3>& vertCoords, Vector2 faceVec, bool verbose) {
+inline Vector3 cartesianVectorToBarycentric(const std::array<Vector2, 3>& vertCoords, Vector2 faceVec) {
 
 
   // Build matrix for linear transform problem
