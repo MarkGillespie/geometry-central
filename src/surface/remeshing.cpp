@@ -145,36 +145,36 @@ inline bool checkFoldover(Vector3 a, Vector3 b, Vector3 c, Vector3 x, double ang
   return diamondAngle(a, b, c, x) < angle;
 }
 
-bool shouldCollapse(ManifoldSurfaceMesh& mesh, VertexPositionGeometry& geom, Edge e) {
+bool mayCollapse(ManifoldSurfaceMesh& mesh, VertexPositionGeometry& geom, Edge e, Vector3 newPos) {
   std::vector<Halfedge> edgesToCheck;
   Vertex v1 = e.halfedge().vertex();
   Vertex v2 = e.halfedge().twin().vertex();
 
   // find (halfedge) link around the edge, starting with those surrounding v1
   for (Halfedge he : v1.outgoingHalfedges()) {
-    if (he.next().tailVertex() != v2 && he.next().tipVertex() != v2) {
+    if (he.isInterior() && he.next().tailVertex() != v2 && he.next().tipVertex() != v2) {
       edgesToCheck.push_back(he.next());
     }
   }
 
   // link around v2
   for (Halfedge he : v2.outgoingHalfedges()) {
-    if (he.next().tailVertex() != v1 && he.next().tipVertex() != v1) {
+    if (he.isInterior() && he.next().tailVertex() != v1 && he.next().tipVertex() != v1) {
       edgesToCheck.push_back(he.next());
     }
   }
 
   // see if the point that would form after a collapse would cause a major foldover with surrounding edges
-  Vector3 midpoint = edgeMidpoint(mesh, geom, e);
   for (Halfedge he0 : edgesToCheck) {
     Halfedge heT = he0.twin();
+    if (!heT.isInterior()) continue;
     Vertex v1 = heT.tailVertex();
     Vertex v2 = heT.tipVertex();
     Vertex v3 = heT.next().tipVertex();
     Vector3 a = geom.vertexPositions[v1];
     Vector3 b = geom.vertexPositions[v2];
     Vector3 c = geom.vertexPositions[v3];
-    if (checkFoldover(a, b, c, midpoint, 2)) {
+    if (checkFoldover(a, b, c, newPos, 2)) {
       return false;
     }
   }
@@ -409,7 +409,13 @@ bool adjustEdgeLengths(ManifoldSurfaceMesh& mesh, VertexPositionGeometry& geom, 
         (useCurvatureAdaptation) ? findMeanTargetL(mesh, geom, e, flatLength, curvatureAdaptation) : flatLength;
     if (geom.edgeLength(e) < threshold * 0.5) {
       Vector3 newPos = edgeMidpoint(mesh, geom, e);
-      if (shouldCollapse(mesh, geom, e)) {
+      // try to preserve boundary vertices if possible
+      Vertex v1 = e.firstVertex();
+      Vertex v2 = e.secondVertex();
+      if (!e.isBoundary() && (v1.isBoundary() || v2.isBoundary())) {
+        newPos = v1.isBoundary() ? geom.vertexPositions[v1] : geom.vertexPositions[v2];
+      }
+      if (mayCollapse(mesh, geom, e, newPos)) {
         Vertex v = mm.collapseEdge(e, newPos);
         if (v != Vertex()) {
           didSplitOrCollapse = true;

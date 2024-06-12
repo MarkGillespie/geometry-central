@@ -1,6 +1,6 @@
 #include "geometrycentral/surface/intrinsic_geometry_interface.h"
 
-//#include "geometrycentral/surface/discrete_operators.h"
+// #include "geometrycentral/surface/discrete_operators.h"
 
 #include <fstream>
 #include <limits>
@@ -327,6 +327,11 @@ void IntrinsicGeometryInterface::computeHalfedgeVectorsInFace() {
     halfedgeVectorsInFace[heAB] = pB;
     halfedgeVectorsInFace[heBC] = pC - pB;
     halfedgeVectorsInFace[heCA] = -pC;
+
+    if (std::isnan(pB.x) || std::isnan(pC.x)) {
+      std::cout << "NAN " << Vector2{0, 0} << " " << pB << " " << pC << std::endl;
+      exit(1);
+    }
   }
 
   // Set all the exterior ones to NaN

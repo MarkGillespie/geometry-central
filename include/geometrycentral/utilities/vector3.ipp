@@ -1,3 +1,5 @@
+#include <Eigen/Dense>
+
 namespace geometrycentral {
 
 inline Vector3 Vector3::operator+(const Vector3& v) const { return Vector3{x + v.x, y + v.y, z + v.z}; }
@@ -13,8 +15,14 @@ inline Vector3 Vector3::operator/(double s) const {
 
 inline const Vector3 Vector3::operator-() const { return Vector3{-x, -y, -z}; }
 
+template <>
+inline Vector3 operator*(const Eigen::Matrix3d& M, const Vector3& v) {
+  return Vector3{M(0, 0) * v.x + M(0, 1) * v.y + M(0, 2) * v.z, M(1, 0) * v.x + M(1, 1) * v.y + M(1, 2) * v.z,
+                 M(2, 0) * v.x + M(2, 1) * v.y + M(2, 2) * v.z};
+}
+
 template <typename T>
-inline Vector3 operator*(const T s, const Vector3& v) {
+inline Vector3 operator*(const T& s, const Vector3& v) {
   return Vector3{s * v.x, s * v.y, s * v.z};
 }
 

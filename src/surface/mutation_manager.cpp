@@ -120,7 +120,9 @@ bool MutationManager::flipEdge(Edge e) {
     return false;
   }
 
-  // Undo the test flip
+  // Undo the test flip. Flip 3 times to get faces back to original position
+  mesh.flip(e);
+  mesh.flip(e);
   mesh.flip(e);
 
   // Invoke before callbacks

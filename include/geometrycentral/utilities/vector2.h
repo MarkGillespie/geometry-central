@@ -8,6 +8,8 @@
 #include <limits>
 #include <sstream>
 
+#include <Eigen/Core>
+
 namespace geometrycentral {
 
 // Note: this class avoids any constructors so that it is a POD type
@@ -74,10 +76,12 @@ struct Vector2 {
 
   bool isFinite() const;
   bool isDefined() const;
+
+  Eigen::Matrix2d toRotationMatrix() const;
 };
 
 template <typename T>
-Vector2 operator*(const T s, const Vector2& v);
+Vector2 operator*(const T& s, const Vector2& v);
 
 ::std::ostream& operator<<(std::ostream& output, const Vector2& v);
 ::std::istream& operator<<(std::istream& input, Vector2& v);

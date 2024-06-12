@@ -21,8 +21,13 @@ inline Vector2 Vector2::operator/(double s) const {
 
 inline const Vector2 Vector2::operator-() const { return Vector2{-x, -y}; }
 
+template <>
+inline Vector2 operator*(const Eigen::Matrix2d& M, const Vector2& v) {
+  return Vector2{M(0, 0) * v.x + M(0, 1) * v.y, M(1, 0) * v.x + M(1, 1) * v.y};
+}
+
 template <typename T>
-inline Vector2 operator*(const T s, const Vector2& v) {
+inline Vector2 operator*(const T& s, const Vector2& v) {
   return Vector2{s * v.x, s * v.y};
 }
 
@@ -150,6 +155,8 @@ inline bool Vector2::isFinite() const { return std::isfinite(x) && std::isfinite
 inline bool isfinite(const Vector2& v) { return v.isFinite(); }
 inline bool Vector2::isDefined() const { return (!std::isnan(x)) && (!std::isnan(y)); }
 inline bool isDefined(const Vector2& v) { return v.isDefined(); }
+
+inline Eigen::Matrix2d Vector2::toRotationMatrix() const { return Eigen::Matrix2d{{x, -y}, {y, x}}; }
 
 inline Vector2 componentwiseMin(const Vector2& u, const Vector2& v) {
   return Vector2{std::fmin(u.x, v.x), std::fmin(u.y, v.y)};

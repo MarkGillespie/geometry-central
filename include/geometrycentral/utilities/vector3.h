@@ -61,7 +61,7 @@ struct Vector3 {
 
 // Scalar multiplication
 template <typename T>
-Vector3 operator*(const T s, const Vector3& v);
+Vector3 operator*(const T& s, const Vector3& v);
 
 // Printing
 ::std::ostream& operator<<(::std::ostream& output, const Vector3& v);
