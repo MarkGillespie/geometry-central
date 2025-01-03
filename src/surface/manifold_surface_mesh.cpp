@@ -1530,7 +1530,7 @@ bool ManifoldSurfaceMesh::removeFaceAlongBoundary(Face f) {
   }
 }
 
-Face ManifoldSurfaceMesh::removeVertex(Vertex v) {
+Face ManifoldSurfaceMesh::removeVertex(Vertex v, bool allowDeltaComplex) {
   if (v.isBoundary()) {
     throw std::runtime_error("not implemented");
   }
@@ -1557,7 +1557,9 @@ Face ManifoldSurfaceMesh::removeVertex(Vertex v) {
   // (except first face)
   std::vector<Halfedge> toRemove;
   for (Halfedge he : v.outgoingHalfedges()) {
-    if (!checkAndAddUniqueEdge(he.edge())) return Face(); // check that the ring is distinct/safe
+    if (!allowDeltaComplex) {
+      if (!checkAndAddUniqueEdge(he.edge())) return Face(); // check that the ring is distinct/safe
+    }
     toRemove.push_back(he);
   }
 
@@ -1570,8 +1572,10 @@ Face ManifoldSurfaceMesh::removeVertex(Vertex v) {
     size_t iStart = ringHalfedges.size();
     while (true) {
 
-      if (!checkAndAddUniqueEdge(ringHe.edge())) return Face(); // check that the ring is distinct/safe
-      if (!checkAndAddUniqueVertex(ringHe.tailVertex())) return Face();
+      if (!allowDeltaComplex) {
+        if (!checkAndAddUniqueEdge(ringHe.edge())) return Face(); // check that the ring is distinct/safe
+        if (!checkAndAddUniqueVertex(ringHe.tailVertex())) return Face();
+      }
 
       ringHalfedges.push_back(ringHe);
 

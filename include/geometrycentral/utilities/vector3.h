@@ -8,6 +8,8 @@
 #include <limits>
 #include <sstream>
 
+#include <Eigen/Dense>
+
 namespace geometrycentral {
 
 // Note: this class avoids any constructors so that it is a POD type

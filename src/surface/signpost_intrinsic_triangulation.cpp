@@ -542,9 +542,16 @@ Face SignpostIntrinsicTriangulation::removeInsertedVertex(Vertex v) {
   // case of degree 2, with exactly degenerate triangles. Since we assume non-degenerate triangles throughout, we'll
   // consider that to not happen.
 
-  if (vertexLocations[v].type == SurfacePointType::Vertex) return Face(); // can't remove original vertices
+  // can't remove original vertices
+  if (vertexLocations[v].type == SurfacePointType::Vertex) {
+    std::cout << "[SignpostIntrinsicTriangulation::removeInsertedVertex]: " << "can't remove original vertices"
+              << std::endl;
+    return Face();
+  }
 
   if (isOnFixedEdge(v)) {
+    std::cout << "[SignpostIntrinsicTriangulation::removeInsertedVertex]: " << "can't remove vertices on fixed edges"
+              << std::endl;
     return Face(); // don't try to remove boundary vertices, for now at least
   }
 
@@ -561,6 +568,9 @@ Face SignpostIntrinsicTriangulation::removeInsertedVertex(Vertex v) {
 
     // failsafe, in case we get numerically stuck, or there are too many fixed edges (or the algorithm is broken)
     if (!anyFlipped || iterCount > 10 * v.degree()) {
+      std::cout << "[SignpostIntrinsicTriangulation::removeInsertedVertex]: " << "failsafe triggered?" << std::endl;
+      std::cout << "anyFlipped: " << (anyFlipped ? "true" : "false") << std::endl;
+      std::cout << v << " has degree " << v.degree() << std::endl;
       return Face();
     }
 
@@ -568,11 +578,18 @@ Face SignpostIntrinsicTriangulation::removeInsertedVertex(Vertex v) {
   }
 
   // give up if something went wrong (eg. flipped edges)
-  if (v.degree() != 3) return Face();
+  if (v.degree() != 3) {
+    std::cout << "[SignpostIntrinsicTriangulation::removeInsertedVertex]: " << "failed to flip " << v << " to degree 3"
+              << std::endl;
+    return Face();
+  }
 
   // Remove the vertex
-  Face newF = intrinsicMesh->removeVertex(v);
-  updateFaceBasis(newF);
+  Face newF = intrinsicMesh->removeVertex(v, true);
+  if (newF == Face()) {
+    throw std::runtime_error("remove vertex failed");
+  }
+  if (newF != Face()) updateFaceBasis(newF);
   triangulationChanged();
   return newF;
 }

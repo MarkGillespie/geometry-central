@@ -13,9 +13,20 @@ inline Vector3 Vector3::operator/(double s) const {
 
 inline const Vector3 Vector3::operator-() const { return Vector3{-x, -y, -z}; }
 
-template <typename T>
-inline Vector3 operator*(const T s, const Vector3& v) {
+// template <typename T>
+// Vector3 operator*(const T s, const Vector3& v) {
+//   return Vector3{s * v.x, s * v.y, s * v.z};
+// }
+
+template <>
+inline Vector3 operator*(const double s, const Vector3& v) {
   return Vector3{s * v.x, s * v.y, s * v.z};
+}
+
+template <>
+inline Vector3 operator*(const Eigen::Matrix3d& A, const Vector3& b) {
+  return {A(0, 0) * b[0] + A(0, 1) * b[1] + A(0, 2) * b[2], A(1, 0) * b[0] + A(1, 1) * b[1] + A(1, 2) * b[2],
+          A(2, 0) * b[0] + A(2, 1) * b[1] + A(2, 2) * b[2]};
 }
 
 inline Vector3& Vector3::operator+=(const Vector3& other) {

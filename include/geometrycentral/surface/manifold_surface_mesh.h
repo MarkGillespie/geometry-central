@@ -72,7 +72,7 @@ public:
 
   // Removes a vertex, leaving a high-degree face. If the input is a boundary vertex, preserves an edge along the
   // boundary. Return Face() if impossible (generally because doing so would make a manifold mesh nonmanifold).
-  Face removeVertex(Vertex v);
+  Face removeVertex(Vertex v, bool allowDeltaComplex = false);
 
   // Make the edge a mirror image of itself, switching the side the two halfedges are on.
   Halfedge switchHalfedgeSides(Edge e);
