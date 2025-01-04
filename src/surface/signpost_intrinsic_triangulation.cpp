@@ -544,50 +544,132 @@ Face SignpostIntrinsicTriangulation::removeInsertedVertex(Vertex v) {
 
   // can't remove original vertices
   if (vertexLocations[v].type == SurfacePointType::Vertex) {
-    std::cout << "[SignpostIntrinsicTriangulation::removeInsertedVertex]: " << "can't remove original vertices"
-              << std::endl;
+    // std::cout << "[SignpostIntrinsicTriangulation::removeInsertedVertex]: "
+    //           << "can't remove original vertices" << std::endl;
     return Face();
   }
 
   if (isOnFixedEdge(v)) {
-    std::cout << "[SignpostIntrinsicTriangulation::removeInsertedVertex]: " << "can't remove vertices on fixed edges"
-              << std::endl;
+    // std::cout << "[SignpostIntrinsicTriangulation::removeInsertedVertex]: "
+    //           << "can't remove vertices on fixed edges" << std::endl;
     return Face(); // don't try to remove boundary vertices, for now at least
   }
 
-  // Flip edges until
+  // === Flip edges until v has degree 3
+
+  auto checkFlip = [&](Edge e) -> double { // check if edge is flippable
+    // Can't flip
+    if (isFixed(e)) return std::numeric_limits<double>::infinity();
+
+    // Check topologically flippable
+    {
+      Halfedge ha1 = e.halfedge();
+      Halfedge ha2 = ha1.next();
+      Halfedge ha3 = ha2.next();
+      Halfedge hb1 = ha1.sibling();
+      Halfedge hb2 = hb1.next();
+      Halfedge hb3 = hb2.next();
+
+      // incident on degree 1 vertex
+      if (ha2 == hb1 || hb2 == ha1) {
+        return std::numeric_limits<double>::infinity();
+      }
+    }
+
+    // Get geometric data
+    Halfedge he = e.halfedge();
+    std::array<Vector2, 4> layoutPositions = layoutDiamond(he);
+
+    // Test if geometryically flippable flippable (both signed areas of new
+    // triangles are positive)
+    double A1 = cross(layoutPositions[1] - layoutPositions[0], layoutPositions[3] - layoutPositions[0]);
+    double A2 = cross(layoutPositions[3] - layoutPositions[2], layoutPositions[1] - layoutPositions[2]);
+    double areaSum = (A1 + A2);
+
+    return std::min(A1 / areaSum, A2 / areaSum);
+  };
+
+
   size_t iterCount = 0;
-  while (v.degree() != 3) {
+  while (v.degree() != 3 && iterCount < 10 * v.degree()) {
 
-    // Find any edge we can flip
-    bool anyFlipped = false;
+    // Find the highest priority edge to flip
+    Edge bestFlipEdge;
+    double bestFlipScore = -std::numeric_limits<double>::infinity();
+    bool bestFlipIsLoop = false;
     for (Edge e : v.adjacentEdges()) {
-      anyFlipped = flipEdgeIfPossible(e);
-      if (anyFlipped) break;
+
+      double flipScore = checkFlip(e);
+      bool isLoop = e.firstVertex() == e.secondVertex();
+
+      // This logic picks the most-preferred edge to flip. The policy is
+      // basically "pick the edge whith the highest flipScore", except
+      // that we prefer loop edges if there are any.
+      if (isLoop) {
+        if (bestFlipIsLoop) {
+          // if the one we currently have is a loop, only take this
+          // one if it is better
+          if (flipScore > bestFlipScore) {
+            bestFlipScore = flipScore;
+            bestFlipEdge = e;
+          }
+
+        } else {
+          // if the one we currently have is not a loop, always take
+          // this one if it is valid
+          if (flipScore > 0.) {
+            bestFlipScore = flipScore;
+            bestFlipEdge = e;
+          }
+        }
+
+
+        bestFlipIsLoop = true;
+      } else {
+        if (!bestFlipIsLoop) { // only overwrite if the best is not a
+                               // loop
+          if (flipScore > bestFlipScore) {
+            bestFlipScore = flipScore;
+            bestFlipEdge = e;
+            bestFlipIsLoop = false;
+          }
+        }
+      }
     }
 
-    // failsafe, in case we get numerically stuck, or there are too many fixed edges (or the algorithm is broken)
-    if (!anyFlipped || iterCount > 10 * v.degree()) {
-      std::cout << "[SignpostIntrinsicTriangulation::removeInsertedVertex]: " << "failsafe triggered?" << std::endl;
-      std::cout << "anyFlipped: " << (anyFlipped ? "true" : "false") << std::endl;
-      std::cout << v << " has degree " << v.degree() << std::endl;
+    if (bestFlipEdge == Edge()) {
+      // std::cout << "failed to remove vertex " + std::to_string(v) + ".  Could not find any edge to flip" <<
+      // std::endl;
       return Face();
+      // throw std::runtime_error("failed to remove vertex " +
+      //                             std::to_string(v) +
+      //                             ".  Could not find any edge to
+      //                             flip");
     }
+
+    // Passing -inf as the tolerance forces us to always do the flip, since
+    // we've already verified it above
+    // flipEdgeIfPossible(bestFlipEdge,
+    //                    -std::numeric_limits<double>::infinity());
+    flipEdgeIfPossible(bestFlipEdge);
 
     iterCount++;
   }
 
   // give up if something went wrong (eg. flipped edges)
   if (v.degree() != 3) {
-    std::cout << "[SignpostIntrinsicTriangulation::removeInsertedVertex]: " << "failed to flip " << v << " to degree 3"
-              << std::endl;
+    // std::cout << "[SignpostIntrinsicTriangulation::removeInsertedVertex]: "
+    //           << "failed to flip " << v << " to degree 3" << std::endl;
     return Face();
   }
 
   // Remove the vertex
-  Face newF = intrinsicMesh->removeVertex(v, true);
+  // TODO FIXME: check if the false ever needs to be changed to true here, otherwise undo changes to
+  // ManifoldSurfaceMesh::removeVertex
+  Face newF = intrinsicMesh->removeVertex(v, false);
   if (newF == Face()) {
-    throw std::runtime_error("remove vertex failed");
+    throw std::runtime_error(
+        "ManifoldSurfaceMesh::removeVertex failed in SignpostIntrinsicTriangulation::removeInsertedVertex");
   }
   if (newF != Face()) updateFaceBasis(newF);
   triangulationChanged();
