@@ -59,6 +59,7 @@ SET(SRCS
   surface/quadric_error_simplification.cpp
   surface/subdivide.cpp
   surface/poisson_disk_sampler.cpp
+  surface/homology_generators.cpp
   #surface/detect_symmetry.cpp
   #surface/mesh_ray_tracer.cpp
   
