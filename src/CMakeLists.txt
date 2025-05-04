@@ -34,6 +34,7 @@ SET(SRCS
   surface/signed_heat_method.cpp
   surface/geodesic_centroidal_voronoi_tessellation.cpp
   surface/trace_geodesic.cpp
+  surface/streamlines.cpp
   surface/normal_coordinates.cpp
   surface/surface_centers.cpp
   surface/simple_idt.cpp
