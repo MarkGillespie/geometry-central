@@ -19,8 +19,8 @@ struct TraceStreamlineOptions {
 // Trace a streamline of field starting from surface point pStart.
 // Warning: If nSym > 1, field should contain a representative vector (i.e. one of the nSym many vectors in the face),
 // _not_ the "power vector" used e.g. by the methods in direction_fields.h
-std::vector<SurfacePoint> traceStreamline(ManifoldSurfaceMesh& mesh, VertexPositionGeometry& geom, SurfacePoint pStart,
-                                          const FaceData<Vector2>& field, size_t nSym = 1,
+std::vector<SurfacePoint> traceStreamline(ManifoldSurfaceMesh& mesh, IntrinsicGeometryInterface& geom,
+                                          SurfacePoint pStart, const FaceData<Vector2>& field, size_t nSym = 1,
                                           TraceStreamlineOptions opt = TraceStreamlineOptions());
 
 // Convenience function to trace streamlines starting from a collection of seed points sampled on the mesh via Poisson
@@ -40,8 +40,8 @@ struct SvgCurveOptions {
   double imageSize = 500;                                        // size of output svg viewBox
 };
 // Write streamlines to an SVG texture located at `filepath` using texture coordinates `param` on the input mesh
-void draw_mesh_curves_to_svg(ManifoldSurfaceMesh& mesh, VertexPositionGeometry& geom, const CornerData<Vector2>& param,
-                             const std::vector<std::vector<SurfacePoint>>& curves, std::string filepath,
-                             SvgCurveOptions opt = SvgCurveOptions());
+void draw_mesh_curves_to_svg(ManifoldSurfaceMesh& mesh, IntrinsicGeometryInterface& geom,
+                             const CornerData<Vector2>& param, const std::vector<std::vector<SurfacePoint>>& curves,
+                             std::string filepath, SvgCurveOptions opt = SvgCurveOptions());
 } // namespace surface
 } // namespace geometrycentral

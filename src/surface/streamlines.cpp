@@ -186,8 +186,8 @@ inline StreamlineSubResult traceStreamlineInFace(IntrinsicGeometryInterface& geo
 }
 
 const TraceStreamlineOptions defaultTraceStreamlineOptions;
-std::vector<SurfacePoint> traceStreamline(ManifoldSurfaceMesh& mesh, VertexPositionGeometry& geom, SurfacePoint pStart,
-                                          const FaceData<Vector2>& vector_field, size_t nSym,
+std::vector<SurfacePoint> traceStreamline(ManifoldSurfaceMesh& mesh, IntrinsicGeometryInterface& geom,
+                                          SurfacePoint pStart, const FaceData<Vector2>& vector_field, size_t nSym,
                                           TraceStreamlineOptions opt) {
   std::vector<SurfacePoint> forwardStreamline{pStart}, reverseStreamline;
 
@@ -231,7 +231,8 @@ std::vector<SurfacePoint> traceStreamline(ManifoldSurfaceMesh& mesh, VertexPosit
   auto should_visit_face = [&](Halfedge he, Vector2 v) {
     if (heCurr == Halfedge() || heCurr.edge().isBoundary()) return false;
 
-    return !opt.nVisits || (*opt.nVisits)[heCurr.twin().face()] < (*opt.maxVisits)[heCurr.twin().face()];
+    return !opt.nVisits || !opt.maxVisits ||
+           (*opt.nVisits)[heCurr.twin().face()] < (*opt.maxVisits)[heCurr.twin().face()];
   };
 
   while (should_visit_face(heCurr, vCurr) && 2 * forwardStreamline.size() < opt.maxSegments &&
@@ -310,9 +311,9 @@ inline Vector2 interpParam(Face f, Vector3 b, const CornerData<Vector2>& param) 
          b[2] * param[f.halfedge().next().next().corner()];
 }
 
-void draw_mesh_curves_to_svg(ManifoldSurfaceMesh& mesh, VertexPositionGeometry& geom, const CornerData<Vector2>& param,
-                             const std::vector<std::vector<SurfacePoint>>& curves, std::string filepath,
-                             SvgCurveOptions opt) {
+void draw_mesh_curves_to_svg(ManifoldSurfaceMesh& mesh, IntrinsicGeometryInterface& geom,
+                             const CornerData<Vector2>& param, const std::vector<std::vector<SurfacePoint>>& curves,
+                             std::string filepath, SvgCurveOptions opt) {
 
   if (!opt.curveColorFunction) {
     opt.curveColorFunction = [&](size_t iCurve, size_t nCurves) -> std::string { return opt.curveColor; };

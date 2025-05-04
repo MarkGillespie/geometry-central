@@ -86,6 +86,7 @@ nav:
       - 'Surface Centers' : 'surface/algorithms/surface_centers.md'
       - 'Surface Sampling' : 'surface/algorithms/surface_sampling.md'
       - 'Tracing Geodesic Paths' : 'surface/algorithms/geodesic_paths.md'
+      - 'Tracing Streamlines' : 'surface/algorithms/streamlines.md'
       - 'Vector Heat Method' : 'surface/algorithms/vector_heat_method.md'
       - 'Stripes' : 'surface/algorithms/stripes.md'
     - Intrinsic Triangulations:
