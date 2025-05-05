@@ -98,5 +98,5 @@ Controls SVG rendering appearance:
 | `#!cpp double worldspaceStrokeWidth` | `0.05` | Stroke width relative to mesh scale |
 | `#!cpp std::string backgroundColor` | `"#fff"` | SVG background color |
 | `#!cpp std::string curveColor` | `"#000000"` | Default curve color |
-| `#!cpp std::function<std::string(size_t, size_t)> curveColorFunction` | `nullptr` | Custom color function (overrides `curveColor`) |
+| `#!cpp std::function<std::string(size_t, size_t)> curveColorFunction` | `nullptr` | Custom color function (overrides `curveColor`). If set, the `i`th curve is colored `curveColorFunction(i, curves.size())` |
 | `#!cpp double imageSize` | `500` | SVG viewBox size |
