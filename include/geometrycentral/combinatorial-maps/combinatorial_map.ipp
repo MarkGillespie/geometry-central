@@ -13,8 +13,24 @@ inline size_t CombinatorialMap<D>::nDarts() const {
 }
 
 template <size_t D>
+template <size_t k>
+inline size_t CombinatorialMap<D>::nCells() const {
+  return k > D ? 0 : nCellsCount[k];
+}
+
+template <size_t D>
 inline size_t CombinatorialMap<D>::nVertices() const {
-  return nVerticesCount;
+  return nCells<0>();
+}
+
+template <size_t D>
+inline size_t CombinatorialMap<D>::nEdges() const {
+  return nCells<1>();
+}
+
+template <size_t D>
+inline size_t CombinatorialMap<D>::nFaces() const {
+  return nCells<2>();
 }
 
 // Capacities
@@ -72,8 +88,9 @@ Dart<D> CombinatorialMap<D>::getNewDart(bool isInterior) {
 }
 
 template <size_t D>
-inline bool CombinatorialMap<D>::vertexIsDead(size_t iV) const {
-  return vDartArr[iV] == INVALID_IND;
+template <size_t k>
+inline bool CombinatorialMap<D>::cellIsDead(size_t iC) const {
+  return (k > D) || (cDartArr[k][iC] == INVALID_IND);
 }
 
 template <size_t D>
@@ -84,13 +101,29 @@ inline bool CombinatorialMap<D>::dartIsDead(size_t iD) const {
 // Methods for iterating over mesh elements w/ range-based for loops ===========
 
 template <size_t D>
-inline VertexSet<D> CombinatorialMap<D>::vertices() {
-  return VertexSet<D>(this, 0, nVerticesFillCount);
+inline DartSet<D> CombinatorialMap<D>::darts() {
+  return DartSet<D>(this, 0, nDartsFillCount);
 }
 
 template <size_t D>
-inline DartSet<D> CombinatorialMap<D>::darts() {
-  return DartSet<D>(this, 0, nDartsFillCount);
+inline VertexSet<D> CombinatorialMap<D>::vertices() {
+  return cells<0>();
+}
+
+template <size_t D>
+inline EdgeSet<D> CombinatorialMap<D>::edges() {
+  return cells<1>();
+}
+
+template <size_t D>
+inline FaceSet<D> CombinatorialMap<D>::faces() {
+  return cells<2>();
+}
+
+template <size_t D>
+template <size_t k>
+inline CellSet<k, D> CombinatorialMap<D>::cells() {
+  return CellSet<k, D>(this, 0, (k > D ? 0 : nCellsFillCount[k]));
 }
 
 // Methods for accessing elements by index =====================================
@@ -102,12 +135,13 @@ inline Dart<D> CombinatorialMap<D>::dart(size_t index) {
 }
 
 template <size_t D>
-VertexData<D, size_t> CombinatorialMap<D>::getVertexIndices() {
+template <size_t k>
+CellData<k, D, size_t> CombinatorialMap<D>::getCellIndices() {
 
-  VertexData<D, size_t> indices(*this);
+  CellData<k, D, size_t> indices(*this);
   size_t i = 0;
-  for (Vertex<D> v : vertices()) {
-    indices[v] = i;
+  for (Cell<k, D> c : cells<k>()) {
+    indices[c] = i;
     i++;
   }
   return indices;
@@ -217,11 +251,11 @@ template <>
 CombinatorialMap<2>::CombinatorialMap(const std::vector<std::vector<size_t>>& polygons) {
   surface::ManifoldSurfaceMesh mesh(polygons);
 
-  nVerticesCount = mesh.nVertices();
+  nCellsCount[0] = mesh.nVertices();
   nDartsCount = mesh.nHalfedges();
-  nVerticesCapacityCount = nVerticesCount;
+  nCellsCapacityCount[0] = nCellsCount[0];
   nDartsCapacityCount = nDartsCount;
-  nVerticesFillCount = nVerticesCount;
+  nCellsFillCount[0] = nCellsCount[0];
   nDartsFillCount = nDartsCount;
 
   // TODO: copy over arrays?
@@ -230,30 +264,30 @@ CombinatorialMap<2>::CombinatorialMap(const std::vector<std::vector<size_t>>& po
   dartMap[0].reserve(mesh.nHalfedges());
   dartMap[1].reserve(mesh.nHalfedges());
   dVertexArr.reserve(mesh.nHalfedges());
-  vDartArr.reserve(mesh.nVertices());
+  cDartArr[0].reserve(mesh.nVertices());
   for (surface::Halfedge he : mesh.halfedges()) {
     dartMap[0].push_back(hIdx[he.next()]);
     dartMap[1].push_back(hIdx[he.twin()]);
     dVertexArr.push_back(vIdx[he.vertex()]);
   }
   for (surface::Vertex v : mesh.vertices()) {
-    vDartArr.push_back(hIdx[v.halfedge()]);
+    cDartArr[0].push_back(hIdx[v.halfedge()]);
   }
 }
 
 // Builds a tet mesh
 template <>
 CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<size_t>>& tets) {
-  nVerticesCount = 0;
+  nCellsCount[0] = 0;
   for (const std::vector<size_t>& tet : tets) {
     GC_SAFETY_ASSERT(tet.size() == 4, "CombinatorialMap<3> can only construct tet meshes from a list of cell vertices");
     for (size_t i : tet) {
-      nVerticesCount = std::max(nVerticesCount, i);
+      nCellsCount[0] = std::max(nCellsCount[0], i);
     }
   }
-  nVerticesCount++; // 0-based means count is max + 1
+  nCellsCount[0]++; // 0-based means count is max + 1
 
-  vDartArr = std::vector<size_t>(nVerticesCount, INVALID_IND);
+  cDartArr[0] = std::vector<size_t>(nCellsCount[0], INVALID_IND);
 
   std::map<std::array<size_t, 3>, size_t> createdDarts;
 
@@ -302,7 +336,7 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<size_t>>& te
 
       size_t iV = tetFaces[iDart / 3][iDart % 3];
       dVertexArr[newDart] = iV;
-      vDartArr[iV] = newDart;
+      cDartArr[0][iV] = newDart;
     }
 
     for (size_t iDart = 0; iDart < 12; ++iDart) {
@@ -329,9 +363,9 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<size_t>>& te
 
   // TODO: do something about boundary
 
-  nVerticesCapacityCount = nVerticesCount;
+  nCellsCapacityCount[0] = nCellsCount[0];
   nDartsCapacityCount = nDartsCount;
-  nVerticesFillCount = nVerticesCount;
+  nCellsFillCount[0] = nCellsCount[0];
   nDartsFillCount = nDartsCount;
 } // namespace combinatorial_map
 

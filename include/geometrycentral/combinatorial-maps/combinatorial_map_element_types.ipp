@@ -45,37 +45,37 @@ inline bool Dart<D>::isDead() const {
 
 // Range iterators
 template <size_t D>
-inline bool VertexRangeF<D>::elementOkay(const CombinatorialMap<D>& mesh, size_t ind) {
-  return !mesh.vertexIsDead(ind);
-}
-
-// Range iterators
-template <size_t D>
 inline bool DartRangeF<D>::elementOkay(const CombinatorialMap<D>& mesh, size_t ind) {
   return !mesh.dartIsDead(ind);
 }
 
 // ==========================================================
-// ================        Vertex        ==================
+// ================        k-Cell        ==================
 // ==========================================================
 
 // Constructors
-template <size_t D>
-inline Vertex<D>::Vertex() {}
+template <size_t k, size_t D>
+inline Cell<k, D>::Cell() {}
 
-template <size_t D>
-inline Vertex<D>::Vertex(CombinatorialMap<D>* mesh_, size_t ind_)
-    : Element<Vertex<D>, CombinatorialMap<D>>(mesh_, ind_) {}
+template <size_t k, size_t D>
+inline Cell<k, D>::Cell(CombinatorialMap<D>* mesh_, size_t ind_)
+    : Element<Cell<k, D>, CombinatorialMap<D>>(mesh_, ind_) {}
 
 // Navigators
-template <size_t D>
-inline Dart<D> Vertex<D>::dart() const {
-  return Dart<D>(this->mesh, this->mesh->vDartArr[this->ind]);
+template <size_t k, size_t D>
+inline Dart<D> Cell<k, D>::dart() const {
+  return Dart<D>(this->mesh, this->mesh->cDartArr[k][this->ind]);
 };
 
-template <size_t D>
-inline bool Vertex<D>::isDead() const {
-  return this->mesh->dartIsDead(this->ind);
+template <size_t k, size_t D>
+inline bool Cell<k, D>::isDead() const {
+  return this->mesh->cellIsDead<k>(this->ind);
+}
+
+// Range iterators
+template <size_t k, size_t D>
+inline bool CellRangeF<k, D>::elementOkay(const CombinatorialMap<D>& mesh, size_t ind) {
+  return !mesh.cellIsDead<k>(ind);
 }
 
 

@@ -19,10 +19,19 @@ template <size_t D>
 class CombinatorialMap;
 
 template <size_t D>
-class Vertex;
-template <size_t D>
 class Dart;
 
+template <size_t k, size_t D>
+class Cell;
+
+template <size_t D>
+using Vertex = Cell<0, D>;
+
+template <size_t D>
+using Edge = Cell<1, D>;
+
+template <size_t D>
+using Face = Cell<2, D>;
 
 template <size_t D, size_t E>
 struct DartOrbitNavigator;
@@ -45,36 +54,7 @@ public:
 
   bool isDead() const;
 };
-
-// ==========================================================
-// ================        Vertex        ==================
-// ==========================================================
-
-template <size_t D>
-class Vertex : public Element<Vertex<D>, CombinatorialMap<D>> {
-public:
-  // Constructors
-  Vertex();                                      // construct an empty (null) element
-  Vertex(CombinatorialMap<D>* mesh, size_t ind); // construct pointing to the i'th element of that type on a mesh.
-
-  // Navigators
-  Dart<D> dart() const;
-
-  bool isDead() const;
-};
-
-
 // == Range iterators
-
-// All vertices
-template <size_t D>
-struct VertexRangeF {
-  static bool elementOkay(const CombinatorialMap<D>& mesh, size_t ind);
-  typedef Vertex<D> Etype;
-  typedef CombinatorialMap<D> ParentMeshT;
-};
-template <size_t D>
-using VertexSet = RangeSetBase<VertexRangeF<D>>;
 
 // All darts
 template <size_t D>
@@ -86,6 +66,44 @@ struct DartRangeF {
 
 template <size_t D>
 using DartSet = RangeSetBase<DartRangeF<D>>;
+
+// ==========================================================
+// ================        k-Cell        ==================
+// ==========================================================
+
+template <size_t k, size_t D>
+class Cell : public Element<Cell<k, D>, CombinatorialMap<D>> {
+public:
+  // Constructors
+  Cell();                                      // construct an empty (null) element
+  Cell(CombinatorialMap<D>* mesh, size_t ind); // construct pointing to the i'th element of that type on a mesh.
+
+  // Navigators
+  Dart<D> dart() const;
+
+  bool isDead() const;
+};
+
+// == Range iterators
+
+// All vertices
+template <size_t k, size_t D>
+struct CellRangeF {
+  static bool elementOkay(const CombinatorialMap<D>& mesh, size_t ind);
+  typedef Cell<k, D> Etype;
+  typedef CombinatorialMap<D> ParentMeshT;
+};
+template <size_t k, size_t D>
+using CellSet = RangeSetBase<CellRangeF<k, D>>;
+
+template <size_t D>
+using VertexSet = CellSet<0, D>;
+
+template <size_t D>
+using EdgeSet = CellSet<1, D>;
+
+template <size_t D>
+using FaceSet = CellSet<2, D>;
 } // namespace combinatorial_map
 
 // Declare specializations of the logic templates. This is important, because these need to be declared before any of

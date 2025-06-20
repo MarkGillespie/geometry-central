@@ -21,10 +21,14 @@ namespace geometrycentral {
 namespace combinatorial_map {
 
 // Typedefs and forward declarations
+template <size_t k, size_t D, typename T>
+using CellData = MeshData<Cell<k, D>, T>;
+
 template <size_t D, typename T>
-using VertexData = surface::MeshData<Vertex<D>, T>;
+using VertexData = MeshData<Vertex<D>, T>;
+
 template <size_t D, typename T>
-using DartData = surface::MeshData<Dart<D>, T>;
+using DartData = MeshData<Dart<D>, T>;
 
 // ==========================================================
 // ================    Combinatorial Map   ==================
@@ -40,21 +44,35 @@ public:
 
 
   // Number of mesh elements of each type
-  size_t nVertices() const;
   size_t nDarts() const;
+
+  size_t nVertices() const;
+  size_t nEdges() const;
+  size_t nFaces() const;
+
+  template <size_t k>
+  size_t nCells() const;
 
   // Methods for range-based for loops
   // Example: for(Vertex v : mesh.vertices()) { ... }
-  VertexSet<D> vertices();
   DartSet<D> darts();
+
+  VertexSet<D> vertices();
+  EdgeSet<D> edges();
+  FaceSet<D> faces();
+
+  template <size_t k>
+  CellSet<k, D> cells();
 
 
   // Methods for accessing elements by index
   // only valid when the  mesh is compressed
   Dart<D> dart(size_t index);
 
-  VertexData<D, size_t> getVertexIndices();
   DartData<D, size_t> getDartIndices();
+
+  template <size_t k>
+  CellData<k, D, size_t> getCellIndices();
 
   size_t nConnectedComponents(); // compute number of connected components [O(n)]
   // virtual bool isManifold(); // Combinatorial maps must be manifold
@@ -124,29 +142,29 @@ protected:
   std::array<std::vector<size_t>, D> dartMap;
 
   size_t dartPartner(size_t iD, size_t dim) const;
-  std::vector<size_t> dVertexArr; // dart.vertex()
-  std::vector<size_t> vDartArr;   // vertex.dart()
+  std::vector<size_t> dVertexArr;                  // dart.vertex()
+  std::array<std::vector<size_t>, D + 1> cDartArr; // cell[k].dart()
 
   // Auxilliary arrays which cache other useful information
 
   // Track element counts (can't rely on rawVertices.size() after deletions have made the list sparse). These are the
   // actual number of valid elements, not the size of the buffer that holds them.
-  size_t nVerticesCount = 0;
   size_t nDartsCount = 0;
+  std::array<size_t, D + 1> nCellsCount{};
 
   // == Track the capacity and fill size of our buffers.
   // These give the capacity of the currently allocated buffer.
   // Note that this is _not_ defined to be std::vector::capacity(), it's the largest size such that arr[i] is legal (aka
   // arr.size()).
-  size_t nVerticesCapacityCount = 0; // will always be even if implicit twin
-  size_t nDartsCapacityCount = 0;    // will always be even if implicit twin
+  size_t nDartsCapacityCount = 0;                  // will always be even if implicit twin
+  std::array<size_t, D + 1> nCellsCapacityCount{}; // will always be even if implicit twin
 
   // These give the number of filled elements in the currently allocated buffer. This will also be the maximal index of
   // any element (except the weirdness of boundary loop faces). As elements get marked dead, nVerticesCount decreases
   // but nVertexFillCount does not (etc), so it denotes the end of the region in the buffer where elements have been
   // stored.
-  size_t nVerticesFillCount = 0;
   size_t nDartsFillCount = 0; // must always be even if implicit twin
+  std::array<size_t, D + 1> nCellsFillCount{};
 
   // The mesh is _compressed_ if all of the index spaces are dense. E.g. if thare are |V| vertices, then the vertices
   // are densely indexed from 0 ... |V|-1 (and likewise for the other elements). The mesh can become not-compressed as
@@ -166,8 +184,9 @@ protected:
   Dart<D> getNewDart(bool isInterior);
 
   // Detect dead elements
-  bool vertexIsDead(size_t iV) const;
   bool dartIsDead(size_t iD) const;
+  template <size_t k>
+  bool cellIsDead(size_t iC) const;
 
   // Deletes leave tombstones, which can be cleaned up with compress().
   // Note that these routines merely mark the element as dead. The caller should hook up connectivity to exclude these
@@ -187,10 +206,13 @@ protected:
 
 
   // Elements need direct access in to members to traverse
-  friend class Vertex<D>;
-  friend struct VertexRangeF<D>;
   friend class Dart<D>;
   friend struct DartRangeF<D>;
+
+  template <size_t k, size_t D1>
+  friend class Cell;
+  template <size_t k, size_t D1>
+  friend struct CellRangeF;
 };
 
 } // namespace combinatorial_map
