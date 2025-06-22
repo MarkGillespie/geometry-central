@@ -50,6 +50,12 @@ public:
 
   // Navigators
   Vertex<D> vertex() const;
+  Edge<D> edge() const;
+  Face<D> face() const;
+
+  template <size_t k>
+  Cell<k, D> cell() const;
+
   Dart<D> partner(size_t d) const;
 
   bool isDead() const;

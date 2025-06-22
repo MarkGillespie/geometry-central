@@ -105,14 +105,14 @@ public:
   // Expansion callbacks
   // Argument is the new size of the element list. Elements up to this index may now be used (but _might_ not be
   // in use immediately).
-  std::list<std::function<void(size_t)>> vertexExpandCallbackList;
   std::list<std::function<void(size_t)>> dartExpandCallbackList;
+  std::array<std::list<std::function<void(size_t)>>, D + 1> cellExpandCallbackList;
 
   // Compression callbacks
   // Argument is a permutation to a apply, such that d_new[i] = d_old[p[i]]. THe length of the permutation is hte size
   // of the new index space. Any elements with p[i] == INVALID_IND are unused in the new index space.
-  std::list<std::function<void(const std::vector<size_t>&)>> vertexPermuteCallbackList;
   std::list<std::function<void(const std::vector<size_t>&)>> dartPermuteCallbackList;
+  std::array<std::list<std::function<void(const std::vector<size_t>&)>>, D + 1> cellPermuteCallbackList;
 
   // Mesh delete callbacks
   // (this unfortunately seems to be necessary; objects which have registered their callbacks above
@@ -122,6 +122,9 @@ public:
   // Check capacity. Needed when implementing expandable containers for mutable meshes to ensure the contain can
   // hold a sufficient number of elements before the next resize event.
   size_t nDartsCapacity() const;
+
+  template <size_t k>
+  size_t nCellsCapacity() const;
 
   // == Debugging, etc
 
@@ -142,8 +145,9 @@ protected:
   std::array<std::vector<size_t>, D> dartMap;
 
   size_t dartPartner(size_t iD, size_t dim) const;
-  std::vector<size_t> dVertexArr;                  // dart.vertex()
+  // std::vector<size_t> dVertexArr;                  // dart.vertex()
   std::array<std::vector<size_t>, D + 1> cDartArr; // cell[k].dart()
+  std::array<std::vector<size_t>, D + 1> dCellArr; // dart.cell<k>()
 
   // Auxilliary arrays which cache other useful information
 
@@ -181,7 +185,10 @@ protected:
   CombinatorialMap& operator=(CombinatorialMap&& other) = delete;
 
   // Used to resize the halfedge mesh. Expands and shifts vectors as necessary.
-  Dart<D> getNewDart(bool isInterior);
+  Dart<D> getNewDart();
+
+  template <size_t k>
+  Cell<k, D> getNewCell();
 
   // Detect dead elements
   bool dartIsDead(size_t iD) const;
@@ -200,6 +207,10 @@ protected:
 
   void initializeDartNeighbors();
   void copyInternalFields(CombinatorialMap& target) const;
+
+  // index k-cells and fill cDartArr[k] and dCellArr[*][k] based off of dartMap
+  template <size_t k>
+  void indexCells();
 
   // replace values of i in arr with oldToNew[i] (skipping INVALID_IND)
   void updateValues(std::vector<size_t>& arr, const std::vector<size_t>& oldToNew);

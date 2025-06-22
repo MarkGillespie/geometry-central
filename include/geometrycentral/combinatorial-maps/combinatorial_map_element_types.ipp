@@ -34,8 +34,25 @@ inline Dart<D> Dart<D>::partner(size_t d) const {
 };
 
 template <size_t D>
+template <size_t k>
+inline Cell<k, D> Dart<D>::cell() const {
+  static_assert(k <= D, "cell dimension k must be less than or equal to complex dimension D");
+  return Cell<k, D>(this->mesh, this->mesh->dCellArr[k][this->ind]);
+};
+
+template <size_t D>
 inline Vertex<D> Dart<D>::vertex() const {
-  return Vertex<D>(this->mesh, this->mesh->dVertexArr[this->ind]);
+  return cell<0>();
+};
+
+template <size_t D>
+inline Edge<D> Dart<D>::edge() const {
+  return cell<1>();
+};
+
+template <size_t D>
+inline Face<D> Dart<D>::face() const {
+  return cell<2>();
 };
 
 template <size_t D>
@@ -179,12 +196,12 @@ iterateElements<combinatorial_map::Dart<3>>(combinatorial_map::CombinatorialMap<
 template <>
 inline std::list<std::function<void(size_t)>>&
 getExpandCallbackList<combinatorial_map::Vertex<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->vertexExpandCallbackList;
+  return mesh->cellExpandCallbackList[0];
 }
 template <>
 inline std::list<std::function<void(size_t)>>&
 getExpandCallbackList<combinatorial_map::Vertex<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->vertexExpandCallbackList;
+  return mesh->cellExpandCallbackList[0];
 }
 template <>
 inline std::list<std::function<void(size_t)>>&
@@ -200,12 +217,12 @@ getExpandCallbackList<combinatorial_map::Dart<3>>(combinatorial_map::Combinatori
 template <>
 inline std::list<std::function<void(const std::vector<size_t>&)>>&
 getPermuteCallbackList<combinatorial_map::Vertex<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->vertexPermuteCallbackList;
+  return mesh->cellPermuteCallbackList[0];
 }
 template <>
 inline std::list<std::function<void(const std::vector<size_t>&)>>&
 getPermuteCallbackList<combinatorial_map::Vertex<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->vertexPermuteCallbackList;
+  return mesh->cellPermuteCallbackList[0];
 }
 template <>
 inline std::list<std::function<void(const std::vector<size_t>&)>>&
