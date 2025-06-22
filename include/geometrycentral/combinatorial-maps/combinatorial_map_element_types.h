@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <iostream>
 #include <list>
+#include <set>
 #include <typeindex>
 #include <unordered_set>
 
@@ -87,6 +88,12 @@ public:
   // Navigators
   Dart<D> dart() const;
 
+  template <size_t k2>
+  std::set<Cell<k2, D>> adjacentCells() const;
+  std::set<Vertex<D>> adjacentVertices() const;
+  std::set<Edge<D>> adjacentEdges() const;
+  std::set<Face<D>> adjacentFaces() const;
+
   bool isDead() const;
 };
 
@@ -126,5 +133,43 @@ using FaceSet = CellSet<2, D>;
 // D> inline std::list<std::function<void(const std::vector<size_t>&)>>&
 // getPermuteCallbackList<combinatorial_map::Dart<D>     >(combinatorial_map::CombinatorialMap<D>* mesh);
 // template<size_t D> inline std::string typeShortName<combinatorial_map::Dart<D>>();
+
+template <>
+inline std::string typeShortName<combinatorial_map::Dart<2>>() {
+  return "d";
+}
+template <>
+inline std::string typeShortName<combinatorial_map::Cell<0, 2>>() {
+  return "v";
+}
+template <>
+inline std::string typeShortName<combinatorial_map::Cell<1, 2>>() {
+  return "e";
+}
+template <>
+inline std::string typeShortName<combinatorial_map::Cell<2, 2>>() {
+  return "f";
+}
+
+template <>
+inline std::string typeShortName<combinatorial_map::Dart<3>>() {
+  return "d";
+}
+template <>
+inline std::string typeShortName<combinatorial_map::Cell<0, 3>>() {
+  return "v";
+}
+template <>
+inline std::string typeShortName<combinatorial_map::Cell<1, 3>>() {
+  return "e";
+}
+template <>
+inline std::string typeShortName<combinatorial_map::Cell<2, 3>>() {
+  return "f";
+}
+template <>
+inline std::string typeShortName<combinatorial_map::Cell<3, 3>>() {
+  return "c";
+}
 
 } // namespace geometrycentral

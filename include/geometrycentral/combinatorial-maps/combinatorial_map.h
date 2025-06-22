@@ -45,29 +45,33 @@ public:
 
   // Number of mesh elements of each type
   size_t nDarts() const;
-
   size_t nVertices() const;
   size_t nEdges() const;
   size_t nFaces() const;
-
   template <size_t k>
   size_t nCells() const;
 
   // Methods for range-based for loops
   // Example: for(Vertex v : mesh.vertices()) { ... }
   DartSet<D> darts();
-
   VertexSet<D> vertices();
   EdgeSet<D> edges();
   FaceSet<D> faces();
-
   template <size_t k>
   CellSet<k, D> cells();
+
+  template <size_t k1, size_t k2>
+  std::set<Cell<k2, D>> adjacentCells(Cell<k1, D> cell) const;
 
 
   // Methods for accessing elements by index
   // only valid when the  mesh is compressed
   Dart<D> dart(size_t index);
+  Vertex<D> vertex(size_t index);
+  Edge<D> edge(size_t index);
+  Face<D> face(size_t index);
+  template <size_t k>
+  Cell<k, D> cell(size_t index);
 
   DartData<D, size_t> getDartIndices();
 

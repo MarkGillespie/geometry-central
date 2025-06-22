@@ -2,12 +2,18 @@
 
 // Implementations for combinatorial_map_mesh_types.h
 
-// Make the element types hashable (this _should_ be doable for just the parent class, but I couldn't sort out how)
 namespace std {
 template <size_t D>
 struct hash<geometrycentral::combinatorial_map::Dart<D>> {
   std::size_t operator()(const geometrycentral::combinatorial_map::Dart<D>& e) const {
     return std::hash<size_t>{}(e.getIndex());
+  }
+};
+
+template <size_t k, size_t D>
+struct hash<geometrycentral::combinatorial_map::Cell<k, D>> {
+  std::size_t operator()(const geometrycentral::combinatorial_map::Cell<k, D>& c) const {
+    return std::hash<size_t>{}(c.getIndex());
   }
 };
 } // namespace std
@@ -84,6 +90,27 @@ inline Dart<D> Cell<k, D>::dart() const {
   return Dart<D>(this->mesh, this->mesh->cDartArr[k][this->ind]);
 };
 
+template <size_t k1, size_t D>
+template <size_t k2>
+inline std::set<Cell<k2, D>> Cell<k1, D>::adjacentCells() const {
+  return this->mesh->template adjacentCells<k1, k2>(*this);
+}
+
+template <size_t k1, size_t D>
+inline std::set<Vertex<D>> Cell<k1, D>::adjacentVertices() const {
+  return adjacentCells<0>();
+}
+
+template <size_t k1, size_t D>
+inline std::set<Edge<D>> Cell<k1, D>::adjacentEdges() const {
+  return adjacentCells<1>();
+}
+
+template <size_t k1, size_t D>
+inline std::set<Face<D>> Cell<k1, D>::adjacentFaces() const {
+  return adjacentCells<2>();
+}
+
 template <size_t k, size_t D>
 inline bool Cell<k, D>::isDead() const {
   return this->mesh->cellIsDead<k>(this->ind);
@@ -92,7 +119,7 @@ inline bool Cell<k, D>::isDead() const {
 // Range iterators
 template <size_t k, size_t D>
 inline bool CellRangeF<k, D>::elementOkay(const CombinatorialMap<D>& mesh, size_t ind) {
-  return !mesh.cellIsDead<k>(ind);
+  return !(mesh.template cellIsDead<k>(ind));
 }
 
 
