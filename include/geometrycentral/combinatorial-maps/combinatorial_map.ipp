@@ -753,9 +753,6 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<size_t>>& te
 
 template <size_t D>
 void CombinatorialMap<D>::validateConnectivity() {
-
-  // TODO: translate this
-
   // Sanity check sizes and counts
   if (nDartsCount > nDartsFillCount) throw std::logic_error("dart count > dart fill");
   if (nDartsFillCount > nDartsCapacityCount) throw std::logic_error("dart fill > dart capacity");
