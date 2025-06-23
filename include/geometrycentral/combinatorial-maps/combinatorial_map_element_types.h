@@ -85,6 +85,8 @@ public:
   // Constructors
   Cell();                                      // construct an empty (null) element
   Cell(CombinatorialMap<D>* mesh, size_t ind); // construct pointing to the i'th element of that type on a mesh.
+  Cell(CombinatorialMap<D>* mesh, size_t ind,
+       bool orientation); // construct pointing to the i'th element of that type on a mesh with specified orientation
 
   // Navigators
   Dart<D> dart() const;
@@ -97,6 +99,13 @@ public:
   std::vector<Face<D>> adjacentFaces() const;
 
   bool isDead() const;
+
+  bool orientation() const;
+  void flipOrientation();
+  void setOrientation(bool orientation);
+
+protected:
+  bool mOrientation = true;
 };
 
 // == Range iterators

@@ -85,15 +85,18 @@ std::vector<Cell<k2, D>> CombinatorialMap<D>::adjacentCells(Cell<k1, D> cell) co
 
   std::set<Dart<D>> seenDarts;
   std::set<Cell<k2, D>> seenCells; // TODO: profile against comparing with neighbors list?
-  std::deque<Dart<D>> dartsToVisit;
-  dartsToVisit.push_back(cell.dart());
+  std::deque<std::pair<Dart<D>, bool>> dartsToVisit;
+  dartsToVisit.push_back(std::make_pair(cell.dart(), true));
   seenDarts.insert(cell.dart());
 
   while (!dartsToVisit.empty()) {
-    Dart<D> curr = dartsToVisit.back();
+    Dart<D> currDart;
+    bool currOrientation;
+    std::tie(currDart, currOrientation) = dartsToVisit.back();
     dartsToVisit.pop_back();
 
-    Cell<k2, D> currCell = curr.template cell<k2>();
+    Cell<k2, D> currCell = currDart.template cell<k2>();
+    currCell.setOrientation(currCell.orientation() == currOrientation);
     if (seenCells.find(currCell) == seenCells.end()) {
       neighbors.push_back(currCell);
       seenCells.insert(currCell);
@@ -106,26 +109,28 @@ std::vector<Cell<k2, D>> CombinatorialMap<D>::adjacentCells(Cell<k1, D> cell) co
     // see e.g. https://doc.cgal.org/latest/Combinatorial_map/index.html#title3
 
     if (k1 == 0) { // when k = 0, orbit over all map[i].map[j] for i < j
-      for (size_t iD = 1; iD < D; ++iD) {
-        for (size_t jD = 0; jD < iD; ++jD) {
-          Dart<D> iPartner = curr.partner(iD);
-          if (iPartner == curr) continue; // skip (INVALID_IND)
-          Dart<D> next = iPartner.partner(jD);
+      for (size_t iMap = 1; iMap < D; ++iMap) {
+        for (size_t jMap = 0; jMap < iMap; ++jMap) {
+          Dart<D> iPartner = currDart.partner(iMap);
+          if (iPartner == currDart) continue; // skip (INVALID_IND)
+          Dart<D> next = iPartner.partner(jMap);
           if (next == iPartner) continue; // skip (INVALID_IND)
+          bool orientationPreserving = true;
           if (seenDarts.find(next) == seenDarts.end()) {
-            dartsToVisit.push_back(next);
+            dartsToVisit.push_back(std::make_pair(next, currOrientation == orientationPreserving));
             seenDarts.insert(next);
           }
         }
       }
     } else { // when k > 0, orbit over all map[i] for i != k-1
       // You need to go in descending order to orient tets properly
-      for (int iD = D - 1; iD >= 0; --iD) {
-        if (iD != int(k1) - 1) {
-          Dart<D> next = curr.partner(iD);
-          if (next == curr) continue; // skip (INVALID_IND)
+      for (int iMap = D - 1; iMap >= 0; --iMap) {
+        if (iMap != int(k1) - 1) {
+          Dart<D> next = currDart.partner(iMap);
+          if (next == currDart) continue; // skip (INVALID_IND)
+          bool orientationPreserving = size_t(iMap + 1) < k1;
           if (seenDarts.find(next) == seenDarts.end()) {
-            dartsToVisit.push_back(next);
+            dartsToVisit.push_back(std::make_pair(next, currOrientation == orientationPreserving));
             seenDarts.insert(next);
           }
         }
@@ -234,6 +239,7 @@ Dart<D> CombinatorialMap<D>::getNewDart() {
     }
     for (size_t iD = 0; iD <= D; ++iD) {
       dCellArr[iD].resize(newDartCapacity);
+      dCellSgn[iD].resize(newDartCapacity);
     }
 
     nDartsCapacityCount = newDartCapacity;
@@ -409,8 +415,8 @@ SparseMatrix<int> CombinatorialMap<D>::getBoundaryMatrix() {
 
   for (Cell<k, D> cell : cells<k>()) {
     for (Cell<k - 1, D> bdyCell : cell.template adjacentCells<k - 1>()) {
-      // TODO: determine orientation
-      triplets.emplace_back(bdyIndices[bdyCell], kIndices[cell], 1);
+      int sign = (bdyCell.orientation()) ? (1) : (-1);
+      triplets.emplace_back(bdyIndices[bdyCell], kIndices[cell], sign);
     }
   }
 
@@ -465,6 +471,7 @@ void CombinatorialMap<D>::copyInternalFields(CombinatorialMap<D>& target) const 
   // TODO: does this still do a deep copy now that this is an std::array?
   target.dartMap = dartMap;
   target.dCellArr = dCellArr;
+  target.dCellSgn = dCellSgn;
   target.cDartArr = cDartArr;
 
   // counts and flags
@@ -499,28 +506,43 @@ void CombinatorialMap<D>::indexCells() {
   for (size_t i = 0; i < nDarts(); i++) parent.push_back(i);
 
   std::vector<size_t> rank(nDarts(), 0); // initialize every dart to rank 0
+  std::vector<bool> sharesParentSign(nDarts(), true);
 
-  auto findRoot = [&parent](size_t x) -> size_t {
+  // find root, and update all nodes in path to point to root, updating their `sharesParentSign` fields as necessary
+  auto findRoot = [&parent, &sharesParentSign](size_t x) -> size_t {
+    if (x == parent[x]) return x; // early return, so we can assume visitedNodes is nonempty later
+
     std::vector<size_t> visitedNodes;
     while (parent[x] != x) {
       visitedNodes.push_back(x);
       x = parent[x];
     }
-    for (size_t n : visitedNodes) parent[n] = x;
+    // iterate through in "last in first out" order
+    bool runningSign = true;
+    for (int iN = visitedNodes.size() - 1; iN >= 0; iN--) {
+      parent[visitedNodes[iN]] = x;
+      sharesParentSign[visitedNodes[iN]] = (sharesParentSign[visitedNodes[iN]] == runningSign);
+      runningSign = sharesParentSign[visitedNodes[iN]];
+    }
+
     return x;
   };
 
-  auto unite = [&parent, &rank, &findRoot](size_t x, size_t y) -> void {
+  // join together x and y, updating their `sharesParentSign` fields as necessary
+  auto unite = [&parent, &rank, &sharesParentSign, &findRoot](size_t x, size_t y, bool samesign) -> void {
     size_t rootX = findRoot(x), rootY = findRoot(y);
     if (rootX == rootY) return;
 
     // Union by rank
     if (rank[rootX] < rank[rootY]) {
       parent[rootX] = rootY;
+      sharesParentSign[rootX] = samesign;
     } else if (rank[rootX] > rank[rootY]) {
       parent[rootY] = rootX;
+      sharesParentSign[rootY] = samesign;
     } else {
       parent[rootY] = rootX;
+      sharesParentSign[rootY] = samesign;
       rank[rootX]++;
     }
   };
@@ -535,16 +557,17 @@ void CombinatorialMap<D>::indexCells() {
           if (jDart == INVALID_IND) continue;
           size_t kDart = dartMap[jMap][jDart];
           if (kDart == INVALID_IND) continue;
-          unite(iDart, kDart);
+          bool orientationPreserving = true;
+          unite(iDart, kDart, orientationPreserving);
         }
       }
     } else {
       for (size_t iMap = 0; iMap < D; iMap++) {
         if (iMap + 1 == k) continue;
-
         size_t jDart = dartMap[iMap][iDart];
         if (jDart == INVALID_IND) continue;
-        unite(iDart, jDart);
+        bool orientationPreserving = iMap + 1 < k;
+        unite(iDart, jDart, orientationPreserving);
 
         if (DEBUG_PRINT) {
           std::cout << "uniting dart " << iDart << " with dart " << jDart << " via map " << iMap << std::endl;
@@ -577,9 +600,11 @@ void CombinatorialMap<D>::indexCells() {
     size_t iRoot = findRoot(iDart);
     if (dCellArr[k][iRoot] == INVALID_IND) {
       dCellArr[k][iRoot] = getNewCell<k>().getIndex();
+      dCellSgn[k][iRoot] = true;
       cDartArr[k][dCellArr[k][iRoot]] = iRoot;
     }
     dCellArr[k][iDart] = dCellArr[k][iRoot];
+    dCellSgn[k][iDart] = sharesParentSign[iDart];
   }
 }
 
@@ -606,6 +631,9 @@ CombinatorialMap<2>::CombinatorialMap(const std::vector<std::vector<size_t>>& po
   dCellArr[0].reserve(mesh.nHalfedges());
   dCellArr[1].reserve(mesh.nHalfedges());
   dCellArr[2].reserve(mesh.nHalfedges());
+  dCellSgn[0].reserve(mesh.nHalfedges());
+  dCellSgn[1].reserve(mesh.nHalfedges());
+  dCellSgn[2].reserve(mesh.nHalfedges());
   cDartArr[0].reserve(mesh.nVertices());
   for (surface::Halfedge he : mesh.halfedges()) {
     dartMap[0].push_back(hIdx[he.next()]);
@@ -613,6 +641,9 @@ CombinatorialMap<2>::CombinatorialMap(const std::vector<std::vector<size_t>>& po
     dCellArr[0].push_back(vIdx[he.vertex()]);
     dCellArr[1].push_back(eIdx[he.edge()]);
     dCellArr[2].push_back(fIdx[he.face()]);
+    dCellSgn[0].push_back(true);
+    dCellSgn[1].push_back(he.orientation());
+    dCellSgn[2].push_back(true);
   }
   for (surface::Vertex v : mesh.vertices()) {
     cDartArr[0].push_back(hIdx[v.halfedge()]);
@@ -688,6 +719,7 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<size_t>>& te
 
       size_t iV = tetFaces[iDart / 3][iDart % 3];
       dCellArr[0][newDart] = iV;
+      dCellSgn[0][newDart] = true;
       cDartArr[0][iV] = newDart;
     }
 
@@ -695,6 +727,7 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<size_t>>& te
       dartMap[0][newDartIndices[iDart]] = newDartIndices[next[iDart]];
       dartMap[1][newDartIndices[iDart]] = newDartIndices[twin[iDart]];
       dCellArr[3][newDartIndices[iDart]] = iCell3;
+      dCellSgn[3][newDartIndices[iDart]] = true;
     }
     cDartArr[3][iCell3] = newDartIndices[0];
 

@@ -46,7 +46,7 @@ template <size_t D>
 template <size_t k>
 inline Cell<k, D> Dart<D>::cell() const {
   static_assert(k <= D, "cell dimension k must be less than or equal to complex dimension D");
-  return Cell<k, D>(this->mesh, this->mesh->dCellArr[k][this->ind]);
+  return Cell<k, D>(this->mesh, this->mesh->dCellArr[k][this->ind], this->mesh->dCellSgn[k][this->ind]);
 };
 
 template <size_t D>
@@ -87,6 +87,10 @@ template <size_t k, size_t D>
 inline Cell<k, D>::Cell(CombinatorialMap<D>* mesh_, size_t ind_)
     : Element<Cell<k, D>, CombinatorialMap<D>>(mesh_, ind_) {}
 
+template <size_t k, size_t D>
+inline Cell<k, D>::Cell(CombinatorialMap<D>* mesh_, size_t ind_, bool orientation)
+    : Element<Cell<k, D>, CombinatorialMap<D>>(mesh_, ind_), mOrientation(orientation) {}
+
 // Navigators
 template <size_t k, size_t D>
 inline Dart<D> Cell<k, D>::dart() const {
@@ -122,6 +126,21 @@ inline std::vector<Face<D>> Cell<k1, D>::adjacentFaces() const {
 template <size_t k, size_t D>
 inline bool Cell<k, D>::isDead() const {
   return this->mesh->cellIsDead<k>(this->ind);
+}
+
+template <size_t k, size_t D>
+inline bool Cell<k, D>::orientation() const {
+  return mOrientation;
+}
+
+template <size_t k, size_t D>
+inline void Cell<k, D>::flipOrientation() {
+  mOrientation = !mOrientation;
+}
+
+template <size_t k, size_t D>
+inline void Cell<k, D>::setOrientation(bool orientation) {
+  mOrientation = orientation;
 }
 
 // Range iterators

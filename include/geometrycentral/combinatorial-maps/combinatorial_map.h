@@ -183,7 +183,8 @@ protected:
   size_t dartPartner(size_t iD, size_t dim) const;
   // std::vector<size_t> dVertexArr;                  // dart.vertex()
   std::array<std::vector<size_t>, D + 1> cDartArr; // cell[k].dart()
-  std::array<std::vector<size_t>, D + 1> dCellArr; // dart.cell<k>()
+  std::array<std::vector<size_t>, D + 1> dCellArr; // dart.cell<k>().getIndex()
+  std::array<std::vector<bool>, D + 1> dCellSgn;   // dart.cell<k>().orientation()
 
   // Auxilliary arrays which cache other useful information
 
