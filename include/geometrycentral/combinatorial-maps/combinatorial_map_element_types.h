@@ -89,6 +89,7 @@ public:
   // Navigators
   Dart<D> dart() const;
 
+  std::vector<Dart<D>> adjacentDarts() const;
   template <size_t k2>
   std::vector<Cell<k2, D>> adjacentCells() const;
   std::vector<Vertex<D>> adjacentVertices() const;
@@ -172,5 +173,4 @@ template <>
 inline std::string typeShortName<combinatorial_map::Cell<3, 3>>() {
   return "c";
 }
-
 } // namespace geometrycentral

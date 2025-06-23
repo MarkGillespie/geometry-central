@@ -67,7 +67,7 @@ public:
   CellSet<k, D> cells();
 
   template <size_t k>
-  std::vector<Dart<D>> adjacentDarts(Cell<k, D> cell) const;
+  std::vector<Dart<D>> adjacentDarts(Cell<k, D> cell);
   template <size_t k1, size_t k2>
   std::vector<Cell<k2, D>> adjacentCells(Cell<k1, D> cell) const;
 
@@ -138,13 +138,31 @@ public:
   // hold a sufficient number of elements before the next resize event.
   size_t nDartsCapacity() const;
 
+  size_t nVerticesCapacity() const;
+  size_t nEdgesCapacity() const;
+  size_t nFacesCapacity() const;
   template <size_t k>
   size_t nCellsCapacity() const;
+
+  // Return the size corresponding to the largest raw index in the mesh (except corners, see below). That is, the
+  // maximum value of he.getIndex()+1 for all halfedges, etc. This may differ from `nHalfedges()` or
+  // `nHalfedgesCapacity()` for non-compressed meshes. It also may differ for corners even in the case of a compressed
+  // mesh. These values may change after any mutation, not just on resize events.
+  size_t dartIndexSize() const;
+  size_t vertexIndexSize() const;
+  size_t edgeIndexSize() const;
+  size_t faceIndexSize() const;
+  template <size_t k>
+  size_t cellIndexSize() const;
 
   // == Debugging, etc
 
   // Performs a sanity checks on dart structure; throws on fail
   void validateConnectivity();
+
+  // index k-cells and fill cDartArr[k] and dCellArr[*][k] based off of dartMap
+  template <size_t k>
+  void indexCells();
 
 protected:
   // Constructor used by subclasses
@@ -209,6 +227,7 @@ protected:
   bool dartIsDead(size_t iD) const;
   template <size_t k>
   bool cellIsDead(size_t iC) const;
+  bool cellIsDead(size_t k, size_t iC) const;
 
   // Deletes leave tombstones, which can be cleaned up with compress().
   // Note that these routines merely mark the element as dead. The caller should hook up connectivity to exclude these
@@ -222,10 +241,6 @@ protected:
 
   void initializeDartNeighbors();
   void copyInternalFields(CombinatorialMap& target) const;
-
-  // index k-cells and fill cDartArr[k] and dCellArr[*][k] based off of dartMap
-  template <size_t k>
-  void indexCells();
 
   // replace values of i in arr with oldToNew[i] (skipping INVALID_IND)
   void updateValues(std::vector<size_t>& arr, const std::vector<size_t>& oldToNew);

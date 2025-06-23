@@ -1,5 +1,3 @@
-#pragma once
-
 // Implementations for combinatorial_map_mesh_types.h
 
 namespace std {
@@ -96,6 +94,11 @@ inline Dart<D> Cell<k, D>::dart() const {
 };
 
 template <size_t k1, size_t D>
+inline std::vector<Dart<D>> Cell<k1, D>::adjacentDarts() const {
+  return this->mesh->adjacentDarts(*this);
+}
+
+template <size_t k1, size_t D>
 template <size_t k2>
 inline std::vector<Cell<k2, D>> Cell<k1, D>::adjacentCells() const {
   return this->mesh->template adjacentCells<k1, k2>(*this);
@@ -157,6 +160,26 @@ inline size_t nElements<combinatorial_map::Vertex<3>>(combinatorial_map::Combina
   return mesh->nVertices();
 }
 template <>
+inline size_t nElements<combinatorial_map::Edge<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
+  return mesh->nEdges();
+}
+template <>
+inline size_t nElements<combinatorial_map::Edge<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
+  return mesh->nEdges();
+}
+template <>
+inline size_t nElements<combinatorial_map::Face<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
+  return mesh->nFaces();
+}
+template <>
+inline size_t nElements<combinatorial_map::Face<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
+  return mesh->nFaces();
+}
+template <>
+inline size_t nElements<combinatorial_map::Cell<3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
+  return mesh->nCells<3>();
+}
+template <>
 inline size_t nElements<combinatorial_map::Dart<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
   return mesh->nDarts();
 }
@@ -167,19 +190,39 @@ inline size_t nElements<combinatorial_map::Dart<3>>(combinatorial_map::Combinato
 
 template <>
 inline size_t elementCapacity<combinatorial_map::Vertex<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->nVertices();
+  return mesh->nVerticesCapacity();
 }
 template <>
 inline size_t elementCapacity<combinatorial_map::Vertex<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->nVertices();
+  return mesh->nVerticesCapacity();
+}
+template <>
+inline size_t elementCapacity<combinatorial_map::Edge<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
+  return mesh->nEdgesCapacity();
+}
+template <>
+inline size_t elementCapacity<combinatorial_map::Edge<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
+  return mesh->nEdgesCapacity();
+}
+template <>
+inline size_t elementCapacity<combinatorial_map::Face<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
+  return mesh->nFacesCapacity();
+}
+template <>
+inline size_t elementCapacity<combinatorial_map::Face<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
+  return mesh->nFacesCapacity();
+}
+template <>
+inline size_t elementCapacity<combinatorial_map::Cell<3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
+  return mesh->nCellsCapacity<3>();
 }
 template <>
 inline size_t elementCapacity<combinatorial_map::Dart<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->nDarts();
+  return mesh->nDartsCapacity();
 }
 template <>
 inline size_t elementCapacity<combinatorial_map::Dart<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->nDarts();
+  return mesh->nDartsCapacity();
 }
 
 template <>
@@ -190,6 +233,31 @@ inline size_t dataIndexOfElement<combinatorial_map::Vertex<2>>(combinatorial_map
 template <>
 inline size_t dataIndexOfElement<combinatorial_map::Vertex<3>>(combinatorial_map::CombinatorialMap<3>* mesh,
                                                                combinatorial_map::Vertex<3> e) {
+  return e.getIndex();
+}
+template <>
+inline size_t dataIndexOfElement<combinatorial_map::Edge<2>>(combinatorial_map::CombinatorialMap<2>* mesh,
+                                                             combinatorial_map::Edge<2> e) {
+  return e.getIndex();
+}
+template <>
+inline size_t dataIndexOfElement<combinatorial_map::Edge<3>>(combinatorial_map::CombinatorialMap<3>* mesh,
+                                                             combinatorial_map::Edge<3> e) {
+  return e.getIndex();
+}
+template <>
+inline size_t dataIndexOfElement<combinatorial_map::Face<2>>(combinatorial_map::CombinatorialMap<2>* mesh,
+                                                             combinatorial_map::Face<2> e) {
+  return e.getIndex();
+}
+template <>
+inline size_t dataIndexOfElement<combinatorial_map::Face<3>>(combinatorial_map::CombinatorialMap<3>* mesh,
+                                                             combinatorial_map::Face<3> e) {
+  return e.getIndex();
+}
+template <>
+inline size_t dataIndexOfElement<combinatorial_map::Cell<3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh,
+                                                                combinatorial_map::Cell<3, 3> e) {
   return e.getIndex();
 }
 template <>
@@ -237,6 +305,31 @@ getExpandCallbackList<combinatorial_map::Vertex<3>>(combinatorial_map::Combinato
 }
 template <>
 inline std::list<std::function<void(size_t)>>&
+getExpandCallbackList<combinatorial_map::Edge<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
+  return mesh->cellExpandCallbackList[1];
+}
+template <>
+inline std::list<std::function<void(size_t)>>&
+getExpandCallbackList<combinatorial_map::Edge<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
+  return mesh->cellExpandCallbackList[1];
+}
+template <>
+inline std::list<std::function<void(size_t)>>&
+getExpandCallbackList<combinatorial_map::Face<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
+  return mesh->cellExpandCallbackList[2];
+}
+template <>
+inline std::list<std::function<void(size_t)>>&
+getExpandCallbackList<combinatorial_map::Face<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
+  return mesh->cellExpandCallbackList[2];
+}
+template <>
+inline std::list<std::function<void(size_t)>>&
+getExpandCallbackList<combinatorial_map::Cell<3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
+  return mesh->cellExpandCallbackList[3];
+}
+template <>
+inline std::list<std::function<void(size_t)>>&
 getExpandCallbackList<combinatorial_map::Dart<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
   return mesh->dartExpandCallbackList;
 }
@@ -255,6 +348,31 @@ template <>
 inline std::list<std::function<void(const std::vector<size_t>&)>>&
 getPermuteCallbackList<combinatorial_map::Vertex<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
   return mesh->cellPermuteCallbackList[0];
+}
+template <>
+inline std::list<std::function<void(const std::vector<size_t>&)>>&
+getPermuteCallbackList<combinatorial_map::Edge<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
+  return mesh->cellPermuteCallbackList[1];
+}
+template <>
+inline std::list<std::function<void(const std::vector<size_t>&)>>&
+getPermuteCallbackList<combinatorial_map::Edge<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
+  return mesh->cellPermuteCallbackList[1];
+}
+template <>
+inline std::list<std::function<void(const std::vector<size_t>&)>>&
+getPermuteCallbackList<combinatorial_map::Face<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
+  return mesh->cellPermuteCallbackList[2];
+}
+template <>
+inline std::list<std::function<void(const std::vector<size_t>&)>>&
+getPermuteCallbackList<combinatorial_map::Face<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
+  return mesh->cellPermuteCallbackList[2];
+}
+template <>
+inline std::list<std::function<void(const std::vector<size_t>&)>>&
+getPermuteCallbackList<combinatorial_map::Cell<3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
+  return mesh->cellPermuteCallbackList[3];
 }
 template <>
 inline std::list<std::function<void(const std::vector<size_t>&)>>&
