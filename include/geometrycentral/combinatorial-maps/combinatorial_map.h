@@ -67,9 +67,9 @@ public:
   CellSet<k, D> cells();
 
   template <size_t k>
-  std::set<Dart<D>> adjacentDarts(Cell<k, D> cell) const;
+  std::vector<Dart<D>> adjacentDarts(Cell<k, D> cell) const;
   template <size_t k1, size_t k2>
-  std::set<Cell<k2, D>> adjacentCells(Cell<k1, D> cell) const;
+  std::vector<Cell<k2, D>> adjacentCells(Cell<k1, D> cell) const;
 
 
   // Methods for accessing elements by index

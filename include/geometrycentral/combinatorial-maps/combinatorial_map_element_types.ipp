@@ -36,7 +36,12 @@ inline Dart<D>::Dart(CombinatorialMap<D>* mesh_, size_t ind_) : Element<Dart<D>,
 template <size_t D>
 inline Dart<D> Dart<D>::partner(size_t d) const {
   size_t partnerInd = this->mesh->dartPartner(this->ind, d);
-  return (partnerInd == INVALID_IND) ? *this : Dart<D>(this->mesh, this->mesh->dartPartner(this->ind, d));
+  return (partnerInd == INVALID_IND) ? *this : Dart<D>(this->mesh, partnerInd);
+};
+
+template <size_t D>
+inline Dart<D> Dart<D>::next() const {
+  return partner(0);
 };
 
 template <size_t D>
@@ -92,22 +97,22 @@ inline Dart<D> Cell<k, D>::dart() const {
 
 template <size_t k1, size_t D>
 template <size_t k2>
-inline std::set<Cell<k2, D>> Cell<k1, D>::adjacentCells() const {
+inline std::vector<Cell<k2, D>> Cell<k1, D>::adjacentCells() const {
   return this->mesh->template adjacentCells<k1, k2>(*this);
 }
 
 template <size_t k1, size_t D>
-inline std::set<Vertex<D>> Cell<k1, D>::adjacentVertices() const {
+inline std::vector<Vertex<D>> Cell<k1, D>::adjacentVertices() const {
   return adjacentCells<0>();
 }
 
 template <size_t k1, size_t D>
-inline std::set<Edge<D>> Cell<k1, D>::adjacentEdges() const {
+inline std::vector<Edge<D>> Cell<k1, D>::adjacentEdges() const {
   return adjacentCells<1>();
 }
 
 template <size_t k1, size_t D>
-inline std::set<Face<D>> Cell<k1, D>::adjacentFaces() const {
+inline std::vector<Face<D>> Cell<k1, D>::adjacentFaces() const {
   return adjacentCells<2>();
 }
 

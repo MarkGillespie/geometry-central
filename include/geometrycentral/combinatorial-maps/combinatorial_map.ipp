@@ -21,29 +21,30 @@ inline size_t CombinatorialMap<D>::nCells() const {
 
 template <size_t D>
 template <size_t k>
-std::set<Dart<D>> CombinatorialMap<D>::adjacentDarts(Cell<k, D> cell) const {
+std::vector<Dart<D>> CombinatorialMap<D>::adjacentDarts(Cell<k, D> cell) const {
   static_assert(k <= D, "input cell dimension k must be less than or equal to complex dimension D");
   static_assert(k != 0, "vertex adjacent cells not implemented yet"); // TODO: implement this
 
   // to find all adjacent darts, we express the input cell as an orbit of dart maps,
-  std::set<Dart<D>> neighbors;
+  std::vector<Dart<D>> neighbors;
 
+  std::set<Dart<D>> seenDarts;
   std::deque<Dart<D>> dartsToVisit;
   dartsToVisit.push_back(cell.dart());
-  neighbors.insert(cell.dart());
+  seenDarts.insert(cell.dart());
 
   while (!dartsToVisit.empty()) {
     Dart<D> curr = dartsToVisit.back();
     dartsToVisit.pop_back();
-    neighbors.insert(curr);
+    neighbors.push_back(cell.dart());
 
     // You need to go in descending order to orient tets properly
     for (size_t iD = D; iD > 0; --iD) {
       if (iD != k) {
         Dart<D> next = curr.partner(iD - 1);
-        if (neighbors.find(next) == neighbors.end()) {
+        if (seenDarts.find(next) == seenDarts.end()) {
           dartsToVisit.push_back(next);
-          neighbors.insert(next);
+          seenDarts.insert(next);
         }
       }
     }
@@ -54,33 +55,38 @@ std::set<Dart<D>> CombinatorialMap<D>::adjacentDarts(Cell<k, D> cell) const {
 
 template <size_t D>
 template <size_t k1, size_t k2>
-std::set<Cell<k2, D>> CombinatorialMap<D>::adjacentCells(Cell<k1, D> cell) const {
+std::vector<Cell<k2, D>> CombinatorialMap<D>::adjacentCells(Cell<k1, D> cell) const {
   static_assert(k1 <= D, "input cell dimension k1 must be less than or equal to complex dimension D");
   static_assert(k2 <= D, "output cell dimension k2 must be less than or equal to complex dimension D");
   static_assert(k1 != 0, "vertex adjacent cells not implemented yet"); // TODO: implement this
 
   // to find all adjacent k2-cells, we express the input cell as an orbit of dart maps,
   // and call d.cell<k2>() for each of these darts
-  std::set<Cell<k2, D>> neighbors;
+  std::vector<Cell<k2, D>> neighbors;
 
-  std::map<Dart<D>, bool> seen; // defaults to false (as bools are default-constructed to false)
+  std::set<Dart<D>> seenDarts;
+  std::set<Cell<k2, D>> seenCells; // TODO: profile against comparing with neighbors list?
   std::deque<Dart<D>> dartsToVisit;
   dartsToVisit.push_back(cell.dart());
-  seen[cell.dart()] = true;
+  seenDarts.insert(cell.dart());
 
   while (!dartsToVisit.empty()) {
     Dart<D> curr = dartsToVisit.back();
     dartsToVisit.pop_back();
 
-    neighbors.insert(curr.template cell<k2>());
+    Cell<k2, D> currCell = curr.template cell<k2>();
+    if (seenCells.find(currCell) == seenCells.end()) {
+      neighbors.push_back(currCell);
+      seenCells.insert(currCell);
+    }
 
     // You need to go in descending order to orient tets properly
     for (size_t iD = D; iD > 0; --iD) {
       if (iD != k1) {
         Dart<D> neighbor = curr.partner(iD - 1);
-        if (!seen[neighbor]) {
+        if (seenDarts.find(neighbor) == seenDarts.end()) { // if we haven't seen neighbor yet
           dartsToVisit.push_back(neighbor);
-          seen[neighbor] = true;
+          seenDarts.insert(neighbor);
         }
       }
     }
@@ -317,43 +323,6 @@ std::vector<std::vector<size_t>> CombinatorialMap<D>::getCellVertexList() {
     for (Vertex<D> v : cell.adjacentVertices()) cellVertexList.back().push_back(vIdx[v]);
   }
   return cellVertexList;
-
-  // DartData<D, char> visited(*this, false);
-  // DartData<D, char> onStack(*this, false);
-
-  // for (Cell<k, D> cell : cells<k>()) {
-  //   Dart<D> d = cell.dart();
-
-  //   std::vector<size_t> cellVertices;
-  //   std::deque<Dart<D>> dartsToVisit;
-  //   dartsToVisit.push_back(d);
-  //   onStack[d] = true;
-
-  //   while (!dartsToVisit.empty()) {
-  //     Dart<D> curr = dartsToVisit.back();
-  //     dartsToVisit.pop_back();
-
-  //     size_t currIdx = curr.vertex().getIndex();
-  //     if (std::find(cellVertices.begin(), cellVertices.end(), currIdx) == cellVertices.end()) {
-  //       cellVertices.push_back(currIdx);
-  //     }
-
-  //     visited[curr] = true;
-
-  //     // You need to go in descending order to orient tets properly
-  //     for (size_t iD = D; iD > 0; --iD) {
-  //       if (iD != k) {
-  //         Dart<D> neighbor = curr.partner(iD - 1);
-  //         if (!visited[neighbor] && !onStack[neighbor]) {
-  //           dartsToVisit.push_back(neighbor);
-  //           onStack[neighbor] = true;
-  //         }
-  //       }
-  //     }
-  //   }
-  //   cellVertexList.push_back(cellVertices);
-  // }
-  // return cellVertexList;
 }
 
 // Misc utility methods =====================================
@@ -410,6 +379,8 @@ template <size_t k>
 void CombinatorialMap<D>::indexCells() {
   static_assert(k <= D, "cell dimension k must be less than or equal to complex dimension D");
   const bool DEBUG_PRINT = false;
+
+  // TODO : we should be able to figure out the orientations as well
 
   // use union-find to identify k-cells as orbits generated by compositions of dart maps
   // 0-cells are generated by <map[0].map[1], map[0].map[2], ..., map[D-2].map[D-1]>

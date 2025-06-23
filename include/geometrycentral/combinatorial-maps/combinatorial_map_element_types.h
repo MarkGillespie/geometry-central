@@ -58,6 +58,7 @@ public:
   Cell<k, D> cell() const;
 
   Dart<D> partner(size_t d) const;
+  Dart<D> next() const;
 
   bool isDead() const;
 };
@@ -89,10 +90,10 @@ public:
   Dart<D> dart() const;
 
   template <size_t k2>
-  std::set<Cell<k2, D>> adjacentCells() const;
-  std::set<Vertex<D>> adjacentVertices() const;
-  std::set<Edge<D>> adjacentEdges() const;
-  std::set<Face<D>> adjacentFaces() const;
+  std::vector<Cell<k2, D>> adjacentCells() const;
+  std::vector<Vertex<D>> adjacentVertices() const;
+  std::vector<Edge<D>> adjacentEdges() const;
+  std::vector<Face<D>> adjacentFaces() const;
 
   bool isDead() const;
 };
