@@ -25,7 +25,7 @@ std::vector<Dart<D>> CombinatorialMap<D>::adjacentDarts(Cell<k, D> cell) {
   // to find all adjacent darts, we express the input cell as an orbit of dart maps,
   std::vector<Dart<D>> neighbors;
 
-  std::set<Dart<D>> seenDarts;
+  std::unordered_set<Dart<D>> seenDarts;
   std::deque<Dart<D>> dartsToVisit;
   dartsToVisit.push_back(cell.dart());
   seenDarts.insert(cell.dart());
@@ -83,8 +83,8 @@ std::vector<Cell<k2, D>> CombinatorialMap<D>::adjacentCells(Cell<k1, D> cell) co
   // and call d.cell<k2>() for each of these darts
   std::vector<Cell<k2, D>> neighbors;
 
-  std::set<Dart<D>> seenDarts;
-  std::set<Cell<k2, D>> seenCells; // TODO: profile against comparing with neighbors list?
+  std::unordered_set<Dart<D>> seenDarts;
+  std::unordered_set<Cell<k2, D>> seenCells; // TODO: profile against comparing with neighbors list?
   std::deque<std::pair<Dart<D>, bool>> dartsToVisit;
   dartsToVisit.push_back(std::make_pair(cell.dart(), true));
   seenDarts.insert(cell.dart());
