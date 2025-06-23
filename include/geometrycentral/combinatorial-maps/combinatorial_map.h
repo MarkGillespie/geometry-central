@@ -158,6 +158,11 @@ public:
   template <size_t k>
   size_t cellIndexSize() const;
 
+  // compute the neighbors of dart d in the orbit defining d's k-cell, along with the relative orientation of each
+  // neighbor compared to d
+  template <size_t k>
+  std::vector<std::pair<Dart<D>, bool>> orbitNeighbors(Dart<D> d) const;
+
   // == Debugging, etc
 
   // Performs a sanity checks on dart structure; throws on fail
