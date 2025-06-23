@@ -19,6 +19,38 @@ inline size_t CombinatorialMap<D>::nCells() const {
   return nCellsCount[k];
 }
 
+template <size_t D>
+template <size_t k>
+std::set<Dart<D>> CombinatorialMap<D>::adjacentDarts(Cell<k, D> cell) const {
+  static_assert(k <= D, "input cell dimension k must be less than or equal to complex dimension D");
+  static_assert(k != 0, "vertex adjacent cells not implemented yet"); // TODO: implement this
+
+  // to find all adjacent darts, we express the input cell as an orbit of dart maps,
+  std::set<Dart<D>> neighbors;
+
+  std::deque<Dart<D>> dartsToVisit;
+  dartsToVisit.push_back(cell.dart());
+  neighbors.insert(cell.dart());
+
+  while (!dartsToVisit.empty()) {
+    Dart<D> curr = dartsToVisit.back();
+    dartsToVisit.pop_back();
+    neighbors.insert(curr);
+
+    // You need to go in descending order to orient tets properly
+    for (size_t iD = D; iD > 0; --iD) {
+      if (iD != k) {
+        Dart<D> next = curr.partner(iD - 1);
+        if (neighbors.find(next) == neighbors.end()) {
+          dartsToVisit.push_back(next);
+          neighbors.insert(next);
+        }
+      }
+    }
+  }
+
+  return neighbors;
+}
 
 template <size_t D>
 template <size_t k1, size_t k2>
@@ -237,6 +269,32 @@ inline Cell<k, D> CombinatorialMap<D>::cell(size_t index) {
 }
 
 template <size_t D>
+DartData<D, size_t> CombinatorialMap<D>::getDartIndices() {
+  DartData<D, size_t> indices(*this);
+  size_t i = 0;
+  for (Dart<D> dart : darts()) {
+    indices[dart] = i;
+    i++;
+  }
+  return indices;
+}
+
+template <size_t D>
+VertexData<D, size_t> CombinatorialMap<D>::getVertexIndices() {
+  return getCellIndices<0>();
+}
+
+template <size_t D>
+EdgeData<D, size_t> CombinatorialMap<D>::getEdgeIndices() {
+  return getCellIndices<1>();
+}
+
+template <size_t D>
+FaceData<D, size_t> CombinatorialMap<D>::getFaceIndices() {
+  return getCellIndices<2>();
+}
+
+template <size_t D>
 template <size_t k>
 CellData<k, D, size_t> CombinatorialMap<D>::getCellIndices() {
   static_assert(k <= D, "cell dimension k must be less than or equal to complex dimension D");
@@ -250,58 +308,52 @@ CellData<k, D, size_t> CombinatorialMap<D>::getCellIndices() {
 }
 
 template <size_t D>
-DartData<D, size_t> CombinatorialMap<D>::getDartIndices() {
-  DartData<D, size_t> indices(*this);
-  size_t i = 0;
-  for (Dart<D> dart : darts()) {
-    indices[dart] = i;
-    i++;
-  }
-  return indices;
-}
-
-template <size_t D>
 template <size_t k>
 std::vector<std::vector<size_t>> CombinatorialMap<D>::getCellVertexList() {
+  VertexData<D, size_t> vIdx = getVertexIndices();
   std::vector<std::vector<size_t>> cellVertexList;
-  // VertexData<D, size_t> vIdx = getVertexIndices();
-
-  DartData<D, char> visited(*this, false);
-  DartData<D, char> onStack(*this, false);
-
   for (Cell<k, D> cell : cells<k>()) {
-    Dart<D> d = cell.dart();
-
-    std::vector<size_t> cellVertices;
-    std::deque<Dart<D>> dartsToVisit;
-    dartsToVisit.push_back(d);
-    onStack[d] = true;
-
-    while (!dartsToVisit.empty()) {
-      Dart<D> curr = dartsToVisit.back();
-      dartsToVisit.pop_back();
-
-      size_t currIdx = curr.vertex().getIndex();
-      if (std::find(cellVertices.begin(), cellVertices.end(), currIdx) == cellVertices.end()) {
-        cellVertices.push_back(currIdx);
-      }
-
-      visited[curr] = true;
-
-      // You need to go in descending order to orient tets properly
-      for (size_t iD = D; iD > 0; --iD) {
-        if (iD != k) {
-          Dart<D> neighbor = curr.partner(iD - 1);
-          if (!visited[neighbor] && !onStack[neighbor]) {
-            dartsToVisit.push_back(neighbor);
-            onStack[neighbor] = true;
-          }
-        }
-      }
-    }
-    cellVertexList.push_back(cellVertices);
+    cellVertexList.push_back({});
+    for (Vertex<D> v : cell.adjacentVertices()) cellVertexList.back().push_back(vIdx[v]);
   }
   return cellVertexList;
+
+  // DartData<D, char> visited(*this, false);
+  // DartData<D, char> onStack(*this, false);
+
+  // for (Cell<k, D> cell : cells<k>()) {
+  //   Dart<D> d = cell.dart();
+
+  //   std::vector<size_t> cellVertices;
+  //   std::deque<Dart<D>> dartsToVisit;
+  //   dartsToVisit.push_back(d);
+  //   onStack[d] = true;
+
+  //   while (!dartsToVisit.empty()) {
+  //     Dart<D> curr = dartsToVisit.back();
+  //     dartsToVisit.pop_back();
+
+  //     size_t currIdx = curr.vertex().getIndex();
+  //     if (std::find(cellVertices.begin(), cellVertices.end(), currIdx) == cellVertices.end()) {
+  //       cellVertices.push_back(currIdx);
+  //     }
+
+  //     visited[curr] = true;
+
+  //     // You need to go in descending order to orient tets properly
+  //     for (size_t iD = D; iD > 0; --iD) {
+  //       if (iD != k) {
+  //         Dart<D> neighbor = curr.partner(iD - 1);
+  //         if (!visited[neighbor] && !onStack[neighbor]) {
+  //           dartsToVisit.push_back(neighbor);
+  //           onStack[neighbor] = true;
+  //         }
+  //       }
+  //     }
+  //   }
+  //   cellVertexList.push_back(cellVertices);
+  // }
+  // return cellVertexList;
 }
 
 // Misc utility methods =====================================
@@ -357,6 +409,7 @@ template <size_t D>
 template <size_t k>
 void CombinatorialMap<D>::indexCells() {
   static_assert(k <= D, "cell dimension k must be less than or equal to complex dimension D");
+  const bool DEBUG_PRINT = false;
 
   // use union-find to identify k-cells as orbits generated by compositions of dart maps
   // 0-cells are generated by <map[0].map[1], map[0].map[2], ..., map[D-2].map[D-1]>
@@ -401,16 +454,39 @@ void CombinatorialMap<D>::indexCells() {
     if (k == 0) {
       for (size_t iMap = 1; iMap < D; iMap++) {
         for (size_t jMap = 0; jMap < iMap; jMap++) {
-          size_t jDart = dartMap[jMap][dartMap[iMap][iDart]];
-          if (jDart != INVALID_IND) unite(iDart, jDart);
+          size_t jDart = dartMap[iMap][iDart];
+          if (jDart == INVALID_IND) continue;
+          size_t kDart = dartMap[jMap][jDart];
+          if (kDart == INVALID_IND) continue;
+          unite(iDart, kDart);
         }
       }
     } else {
       for (size_t iMap = 0; iMap < D; iMap++) {
-        if (iMap == k) continue;
+        if (iMap + 1 == k) continue;
+
         size_t jDart = dartMap[iMap][iDart];
-        if (jDart != INVALID_IND) unite(iDart, jDart);
+        if (jDart == INVALID_IND) continue;
+        unite(iDart, jDart);
+
+        if (DEBUG_PRINT) {
+          std::cout << "uniting dart " << iDart << " with dart " << jDart << " via map " << iMap << std::endl;
+        }
       }
+    }
+  }
+
+  if (DEBUG_PRINT) {
+    std::cout << std::endl << "Final " << k << "-cell orbits: " << std::endl;
+    for (size_t iRoot = 0; iRoot < nDarts(); iRoot++) {
+      if (findRoot(iRoot) != iRoot) continue;
+      std::cout << "  root " << iRoot << std::endl;
+      for (size_t iDart = 0; iDart < nDarts(); iDart++) {
+        if (findRoot(iDart) == iRoot) {
+          std::cout << "     dart " << iDart << std::endl;
+        }
+      }
+      std::cout << std::endl;
     }
   }
 
@@ -469,6 +545,7 @@ CombinatorialMap<2>::CombinatorialMap(const std::vector<std::vector<size_t>>& po
 // Builds a tet mesh
 template <>
 CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<size_t>>& tets) {
+  const bool DEBUG_PRINT = false;
   nCellsCount[0] = 0;
   for (const std::vector<size_t>& tet : tets) {
     GC_SAFETY_ASSERT(tet.size() == 4, "CombinatorialMap<3> can only construct tet meshes from a list of cell vertices");
@@ -483,6 +560,7 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<size_t>>& te
   std::map<std::array<size_t, 3>, size_t> createdDarts;
 
   auto shift = [&](std::array<size_t, 3> key) -> std::array<size_t, 3> { return {key[1], key[2], key[0]}; };
+  auto flip = [&](std::array<size_t, 3> key) -> std::array<size_t, 3> { return {key[1], key[0], key[2]}; };
 
   auto createdDartLookup = [&](std::array<size_t, 3> key) -> size_t {
     auto keyIter = createdDarts.find(key);
@@ -497,34 +575,34 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<size_t>>& te
     if (keyIter != createdDarts.end()) {
       return dartMap[0][keyIter->second];
     }
-    createdDarts[key] = INVALID_IND;
     return INVALID_IND;
   };
 
   // === Walk the tets, creating darts. Hook up dartMap[0] and dartMap[1] pointers (halfedges on tet surfaces), but
   // don't hook up dartMap[2] yet (gluing tets together).
 
+  // The oriented faces of tet {0, 1, 2, 3} are given by {{0, 1, 2}, {0, 2, 3}, {1, 3, 2}, {0, 3, 1}}
+  // We index the tet's halfedges as 0 1 2, 3 4 5, 6 7 8, 9 10 11
+  // The next array is 1 2 0, 4 5 3, 7 8 6, 10 11 9
+  // The twin array is 11 8 3, 2 7 9, 10 4 1, 5 6 0
+  const std::array<std::array<size_t, 3>, 4> tetFaceIndices{
+      std::array<size_t, 3>{0, 1, 2}, std::array<size_t, 3>{0, 2, 3}, std::array<size_t, 3>{1, 3, 2},
+      std::array<size_t, 3>{0, 3, 1}};
+  const std::array<size_t, 12> next{1, 2, 0, 4, 5, 3, 7, 8, 6, 10, 11, 9};
+  const std::array<size_t, 12> twin{11, 8, 3, 2, 7, 9, 10, 4, 1, 5, 6, 0};
+
   for (size_t iTet = 0; iTet < tets.size(); iTet++) {
     const std::vector<size_t>& tet = tets[iTet];
     size_t iCell3 = getNewCell<3>().getIndex();
 
-    // The oriented faces of tet {0, 1, 2, 3} are given by {{0, 1, 2}, {0, 2, 3}, {1, 3, 2}, {0, 3, 1}}
-    // We index the tet's halfedges as 0 1 2, 3 4 5, 6 7 8, 9 10 11
-    // The next array is 1 2 0, 4 5 3, 7 8 6, 10 11 9
-    // The twin array is 11 8 3, 2 7 9, 10 4 1, 5 6 0
-    const std::array<std::array<size_t, 3>, 4> tetFaceIndices{
-        std::array<size_t, 3>{0, 1, 2}, std::array<size_t, 3>{0, 2, 3}, std::array<size_t, 3>{1, 3, 2},
-        std::array<size_t, 3>{0, 3, 1}};
     const std::array<std::array<size_t, 3>, 4> tetFaces{
         std::array<size_t, 3>{tet[0], tet[1], tet[2]}, std::array<size_t, 3>{tet[0], tet[2], tet[3]},
         std::array<size_t, 3>{tet[1], tet[3], tet[2]}, std::array<size_t, 3>{tet[0], tet[3], tet[1]}};
-    const std::array<size_t, 12> next{1, 2, 0, 4, 5, 3, 7, 8, 6, 10, 11, 9};
-    const std::array<size_t, 12> twin{11, 8, 3, 2, 7, 9, 10, 4, 1, 5, 6, 0};
 
-    std::array<size_t, 12> createdDarts;
+    std::array<size_t, 12> newDartIndices;
     for (size_t iDart = 0; iDart < 12; ++iDart) {
       size_t newDart = getNewDart().getIndex();
-      createdDarts[iDart] = newDart;
+      newDartIndices[iDart] = newDart;
 
       size_t iV = tetFaces[iDart / 3][iDart % 3];
       dCellArr[0][newDart] = iV;
@@ -532,34 +610,62 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<size_t>>& te
     }
 
     for (size_t iDart = 0; iDart < 12; ++iDart) {
-      dartMap[0][createdDarts[iDart]] = createdDarts[next[iDart]];
-      dartMap[1][createdDarts[iDart]] = createdDarts[twin[iDart]];
-      dCellArr[3][createdDarts[iDart]] = iCell3;
-    }
-    cDartArr[3][iCell3] = createdDarts[0];
+      dartMap[0][newDartIndices[iDart]] = newDartIndices[next[iDart]];
+      dartMap[1][newDartIndices[iDart]] = newDartIndices[twin[iDart]];
+      dCellArr[3][newDartIndices[iDart]] = iCell3;
 
+      // initialize dartMap[2] to INVALID_IND (nothing glued together)
+      dartMap[2][newDartIndices[iDart]] = INVALID_IND;
+    }
+    cDartArr[3][iCell3] = newDartIndices[0];
+
+    if (DEBUG_PRINT) {
+      for (size_t iDart = 0; iDart < 12; ++iDart) {
+        std::cout << "Dart " << newDartIndices[iDart] << " : " << dCellArr[0][newDartIndices[iDart]] << "->"
+                  << dCellArr[0][dartMap[0][newDartIndices[iDart]]] << std::endl;
+      }
+    }
+
+    // glue together opposite faces
     for (size_t iF = 0; iF < 4; ++iF) {
       const std::array<size_t, 3> face = tetFaces[iF];
-      size_t twinFaceDart = createdDartLookup(face);
+      size_t twinFaceDart = createdDartLookup(flip(face));
       if (twinFaceDart == INVALID_IND) {
-        // if the opposite face has not been created, set the appropriate pointers to empty
-        for (size_t iDart : tetFaceIndices[iF]) {
-          dartMap[2][createdDarts[iDart]] = INVALID_IND;
-        }
+        // if the opposite face has not been created, leave the dartMap[2] pointers empty
+        createdDarts[face] = newDartIndices[3 * iF];
       } else {
+        if (DEBUG_PRINT) {
+          size_t myDart = newDartIndices[3 * iF + 0];
+          size_t oppDart = twinFaceDart;
+          std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
+                    << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
+                    << "[dart " << oppDart << "]" << std::endl;
+          myDart = newDartIndices[3 * iF + 2];
+          oppDart = dartMap[0][twinFaceDart];
+          std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
+                    << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
+                    << "[dart " << oppDart << "]" << std::endl;
+          myDart = newDartIndices[3 * iF + 1];
+          oppDart = dartMap[0][dartMap[0][twinFaceDart]];
+          std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
+                    << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
+                    << "[dart " << oppDart << "]" << std::endl;
+        }
+
         // if the opposite face has already created, hook up the appropriate pointers
-        dartMap[2][createdDarts[tetFaceIndices[iF][0]]] = twinFaceDart;
-        dartMap[2][createdDarts[tetFaceIndices[iF][2]]] = dartMap[0][twinFaceDart];
-        dartMap[2][createdDarts[tetFaceIndices[iF][1]]] = dartMap[0][dartMap[0][twinFaceDart]];
+        dartMap[2][newDartIndices[3 * iF + 0]] = twinFaceDart;
+        dartMap[2][newDartIndices[3 * iF + 2]] = dartMap[0][twinFaceDart];
+        dartMap[2][newDartIndices[3 * iF + 1]] = dartMap[0][dartMap[0][twinFaceDart]];
       }
     }
   }
 
+
   // TODO: do something about boundary
 
   nCellsCapacityCount[0] = nCellsCount[0];
-  nDartsCapacityCount = nDartsCount;
   nCellsFillCount[0] = nCellsCount[0];
+  nDartsCapacityCount = nDartsCount;
   nDartsFillCount = nDartsCount;
 
   indexCells<1>();

@@ -28,6 +28,12 @@ template <size_t D, typename T>
 using VertexData = MeshData<Vertex<D>, T>;
 
 template <size_t D, typename T>
+using EdgeData = MeshData<Edge<D>, T>;
+
+template <size_t D, typename T>
+using FaceData = MeshData<Face<D>, T>;
+
+template <size_t D, typename T>
 using DartData = MeshData<Dart<D>, T>;
 
 // ==========================================================
@@ -60,6 +66,8 @@ public:
   template <size_t k>
   CellSet<k, D> cells();
 
+  template <size_t k>
+  std::set<Dart<D>> adjacentDarts(Cell<k, D> cell) const;
   template <size_t k1, size_t k2>
   std::set<Cell<k2, D>> adjacentCells(Cell<k1, D> cell) const;
 
@@ -75,10 +83,13 @@ public:
 
   DartData<D, size_t> getDartIndices();
 
+  VertexData<D, size_t> getVertexIndices();
+  EdgeData<D, size_t> getEdgeIndices();
+  FaceData<D, size_t> getFaceIndices();
   template <size_t k>
   CellData<k, D, size_t> getCellIndices();
 
-  size_t nConnectedComponents(); // compute number of connected components [O(n)]
+  size_t nConnectedComponents() const; // compute number of connected components [O(n)]
   // virtual bool isManifold(); // Combinatorial maps must be manifold
   // virtual bool isEdgeManifold();
   // virtual bool isOriented(); // Combinatorial maps must be oriented
