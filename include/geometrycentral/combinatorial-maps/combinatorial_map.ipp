@@ -58,7 +58,7 @@ std::vector<Dart<D>> CombinatorialMap<D>::adjacentDarts(Cell<k, D> cell) {
     } else { // when k > 0, orbit over all map[i] for i != k-1
       // You need to go in descending order to orient tets properly
       for (int iD = D - 1; iD >= 0; --iD) {
-        if (iD != k - 1) {
+        if (iD != int(k) - 1) {
           Dart<D> next = curr.partner(iD);
           if (next == curr) continue; // skip (INVALID_IND)
           if (seenDarts.find(next) == seenDarts.end()) {
@@ -121,7 +121,7 @@ std::vector<Cell<k2, D>> CombinatorialMap<D>::adjacentCells(Cell<k1, D> cell) co
     } else { // when k > 0, orbit over all map[i] for i != k-1
       // You need to go in descending order to orient tets properly
       for (int iD = D - 1; iD >= 0; --iD) {
-        if (iD != k1 - 1) {
+        if (iD != int(k1) - 1) {
           Dart<D> next = curr.partner(iD);
           if (next == curr) continue; // skip (INVALID_IND)
           if (seenDarts.find(next) == seenDarts.end()) {
@@ -394,6 +394,29 @@ CellData<k, D, size_t> CombinatorialMap<D>::getCellIndices() {
     i++;
   }
   return indices;
+}
+
+template <size_t D>
+template <size_t k>
+SparseMatrix<int> CombinatorialMap<D>::getBoundaryMatrix() {
+  static_assert(k > 0, "Boundary_0 matrix not defined");
+  static_assert(k <= D, "Boundary_k matrix not defined for k > complex dimension D");
+
+  std::vector<Eigen::Triplet<int>> triplets;
+
+  CellData<k, D, size_t> kIndices = getCellIndices<k>();
+  CellData<k - 1, D, size_t> bdyIndices = getCellIndices<k - 1>();
+
+  for (Cell<k, D> cell : cells<k>()) {
+    for (Cell<k - 1, D> bdyCell : cell.template adjacentCells<k - 1>()) {
+      // TODO: determine orientation
+      triplets.emplace_back(bdyIndices[bdyCell], kIndices[cell], 1);
+    }
+  }
+
+  SparseMatrix<int> bdy(nCells<k - 1>(), nCells<k>());
+  bdy.setFromTriplets(triplets.begin(), triplets.end());
+  return bdy;
 }
 
 template <size_t D>

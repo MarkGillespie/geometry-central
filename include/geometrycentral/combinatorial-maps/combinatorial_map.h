@@ -89,6 +89,9 @@ public:
   template <size_t k>
   CellData<k, D, size_t> getCellIndices();
 
+  template <size_t k>
+  SparseMatrix<int> getBoundaryMatrix(); // boundary of k-cell as a sum of (k-1)-cells
+
   size_t nConnectedComponents() const; // compute number of connected components [O(n)]
   // virtual bool isManifold(); // Combinatorial maps must be manifold
   // virtual bool isEdgeManifold();
