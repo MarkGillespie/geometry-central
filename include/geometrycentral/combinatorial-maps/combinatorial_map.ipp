@@ -88,8 +88,9 @@ std::vector<Cell<k2, D>> CombinatorialMap<D>::adjacentCells(Cell<k1, D> cell) co
   // and call d.cell<k2>() for each of these darts
   std::vector<Cell<k2, D>> neighbors;
 
+  // TODO: profile against using std::vector + std::find. Remember to compile in relase mode!
   std::unordered_set<Dart<D>> seenDarts;
-  std::unordered_set<Cell<k2, D>> seenCells; // TODO: profile against using std::vector + std::find
+  std::unordered_set<Cell<k2, D>> seenCells;
   std::deque<std::pair<Dart<D>, bool>> dartsToVisit;
   dartsToVisit.push_back(std::make_pair(cell.dart(), true));
   seenDarts.insert(cell.dart());
