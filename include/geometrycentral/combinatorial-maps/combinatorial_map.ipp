@@ -415,8 +415,7 @@ SparseMatrix<int> CombinatorialMap<D>::getBoundaryMatrix() {
 
   for (Cell<k, D> cell : cells<k>()) {
     for (Cell<k - 1, D> bdyCell : cell.template adjacentCells<k - 1>()) {
-      int sign = (bdyCell.orientation()) ? (1) : (-1);
-      triplets.emplace_back(bdyIndices[bdyCell], kIndices[cell], sign);
+      triplets.emplace_back(bdyIndices[bdyCell], kIndices[cell], bdyCell.sign());
     }
   }
 

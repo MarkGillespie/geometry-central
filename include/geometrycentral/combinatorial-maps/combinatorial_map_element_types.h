@@ -104,6 +104,8 @@ public:
   void flipOrientation();
   void setOrientation(bool orientation);
 
+  int sign() const;
+
 protected:
   bool mOrientation = true;
 };

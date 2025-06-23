@@ -143,6 +143,11 @@ inline void Cell<k, D>::setOrientation(bool orientation) {
   mOrientation = orientation;
 }
 
+template <size_t k, size_t D>
+inline int Cell<k, D>::sign() const {
+  return mOrientation ? 1 : -1;
+}
+
 // Range iterators
 template <size_t k, size_t D>
 inline bool CellRangeF<k, D>::elementOkay(const CombinatorialMap<D>& mesh, size_t ind) {
