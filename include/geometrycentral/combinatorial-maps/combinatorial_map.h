@@ -36,6 +36,16 @@ using FaceData = MeshData<Face<D>, T>;
 template <size_t D, typename T>
 using DartData = MeshData<Dart<D>, T>;
 
+template <size_t D>
+class CombinatorialMap;
+
+template <size_t D, size_t k>
+struct OrbitNeighborhoodIterator;
+
+template <size_t D, size_t k>
+class OrbitNeighborhood;
+
+
 // ==========================================================
 // ================    Combinatorial Map   ==================
 // ==========================================================
@@ -69,7 +79,7 @@ public:
   template <size_t k>
   std::vector<Dart<D>> adjacentDarts(Cell<k, D> cell);
   template <size_t k1, size_t k2>
-  std::vector<Cell<k2, D>> adjacentCells(Cell<k1, D> cell) const;
+  std::vector<Cell<k2, D>> adjacentCells(Cell<k1, D> cell, bool useDirectLoop = false) const;
 
 
   // Methods for accessing elements by index
@@ -158,10 +168,12 @@ public:
   template <size_t k>
   size_t cellIndexSize() const;
 
-  // compute the neighbors of dart d in the orbit defining d's k-cell, along with the relative orientation of each
-  // neighbor compared to d
+  // Loop over the neighbors of dart `d` in the orbit defining `d`s k-cell
+  // can be used as `for (std::pair<Dart<D>, bool> neighbor : mesh.orbitNeighbors<k>(dart)) { ... }`,
+  // where the first component is the neighboring dart, and the second component is the relative orientation of the dart
+  // compared to `d`
   template <size_t k>
-  std::vector<std::pair<Dart<D>, bool>> orbitNeighbors(Dart<D> d) const;
+  OrbitNeighborhood<D, k> orbitNeighbors(Dart<D> d) const;
 
   // == Debugging, etc
 
