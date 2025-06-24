@@ -24,14 +24,15 @@ std::vector<Dart<D>> CombinatorialMap<D>::adjacentDarts(Cell<k, D> cell) {
 
   // to find all adjacent darts, we express the input cell as an orbit of dart maps,
   std::vector<Dart<D>> neighbors;
+  neighbors.reserve(16); // reserve some amount of space
 
   std::deque<Dart<D>> dartsToVisit;
   dartsToVisit.push_back(cell.dart());
   neighbors.push_back(cell.dart());
 
   while (!dartsToVisit.empty()) {
-    Dart<D> curr = dartsToVisit.back();
-    dartsToVisit.pop_back();
+    Dart<D> curr = dartsToVisit.front();
+    dartsToVisit.pop_front();
 
     for (std::pair<Dart<D>, bool> n : orbitNeighbors<k>(curr)) {
       if (std::find(neighbors.begin(), neighbors.end(), n.first) == neighbors.end()) {
@@ -54,6 +55,9 @@ std::vector<Cell<k2, D>> CombinatorialMap<D>::adjacentCells(Cell<k1, D> cell) co
   // and call d.cell<k2>() for each of these darts
   std::vector<Cell<k2, D>> neighbors;
   std::vector<Dart<D>> seenDarts;
+  neighbors.reserve(8);  // reserve some amount of space
+  seenDarts.reserve(16); // reserve some amount of space
+
   std::deque<std::pair<Dart<D>, bool>> dartsToVisit;
   dartsToVisit.push_back(std::make_pair(cell.dart(), true));
   seenDarts.push_back(cell.dart());
@@ -61,8 +65,8 @@ std::vector<Cell<k2, D>> CombinatorialMap<D>::adjacentCells(Cell<k1, D> cell) co
   while (!dartsToVisit.empty()) {
     Dart<D> currDart;
     bool currOrientation;
-    std::tie(currDart, currOrientation) = dartsToVisit.back();
-    dartsToVisit.pop_back();
+    std::tie(currDart, currOrientation) = dartsToVisit.front();
+    dartsToVisit.pop_front();
 
     Cell<k2, D> currCell = currDart.template cell<k2>();
     currCell.setOrientation(currCell.orientation() == currOrientation);
