@@ -79,7 +79,7 @@ public:
   template <size_t k>
   std::vector<Dart<D>> adjacentDarts(Cell<k, D> cell);
   template <size_t k1, size_t k2>
-  std::vector<Cell<k2, D>> adjacentCells(Cell<k1, D> cell, bool useDirectLoop = false) const;
+  std::vector<Cell<k2, D>> adjacentCells(Cell<k1, D> cell) const;
 
 
   // Methods for accessing elements by index
