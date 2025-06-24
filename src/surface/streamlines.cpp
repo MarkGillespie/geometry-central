@@ -374,7 +374,7 @@ void draw_mesh_curves_to_svg(ManifoldSurfaceMesh& mesh, IntrinsicGeometryInterfa
         double d = (qj - qi).norm();
 
         if ((qi - qPrev).norm() < dim * 1e-5) { // continuing old curve
-          out << qPrev.x << "," << qPrev.y << " ";
+          out << qj.x << "," << qj.y << " ";
         } else { // start a new curve
           if (iP > 0) out << "\"/>" << std::endl;
           out << "<polyline fill=\"none\" stroke=\"" << opt.curveColorFunction(iCurve, curves.size())
