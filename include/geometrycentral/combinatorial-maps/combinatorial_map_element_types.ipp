@@ -108,19 +108,19 @@ inline std::vector<Cell<k2, D>> Cell<k1, D>::adjacentCells() const {
   return this->mesh->template adjacentCells<k1, k2>(*this);
 }
 
-template <size_t k1, size_t D>
-inline std::vector<Vertex<D>> Cell<k1, D>::adjacentVertices() const {
-  return adjacentCells<0>();
+template <size_t k, size_t D>
+inline std::vector<Vertex<D>> Cell<k, D>::adjacentVertices() const {
+  return this->mesh->template adjacentVertices<k>(*this);
 }
 
-template <size_t k1, size_t D>
-inline std::vector<Edge<D>> Cell<k1, D>::adjacentEdges() const {
-  return adjacentCells<1>();
+template <size_t k, size_t D>
+inline std::vector<Edge<D>> Cell<k, D>::adjacentEdges() const {
+  return this->mesh->template adjacentEdges<k>(*this);
 }
 
-template <size_t k1, size_t D>
-inline std::vector<Face<D>> Cell<k1, D>::adjacentFaces() const {
-  return adjacentCells<2>();
+template <size_t k, size_t D>
+inline std::vector<Face<D>> Cell<k, D>::adjacentFaces() const {
+  return this->mesh->template adjacentFaces<k>(*this);
 }
 
 template <size_t k, size_t D>

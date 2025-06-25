@@ -31,8 +31,9 @@ std::vector<Dart<D>> CombinatorialMap<D>::adjacentDarts(Cell<k, D> cell) {
   neighbors.push_back(cell.dart());
 
   while (!dartsToVisit.empty()) {
-    Dart<D> curr = dartsToVisit.front();
-    dartsToVisit.pop_front();
+    // for some reason, iterating in DFS order is important for orienting cells
+    Dart<D> curr = dartsToVisit.back();
+    dartsToVisit.pop_back();
 
     for (std::pair<Dart<D>, bool> n : orbitNeighbors<k>(curr)) {
       if (std::find(neighbors.begin(), neighbors.end(), n.first) == neighbors.end()) {
@@ -63,10 +64,11 @@ std::vector<Cell<k2, D>> CombinatorialMap<D>::adjacentCells(Cell<k1, D> cell) co
   seenDarts.push_back(cell.dart());
 
   while (!dartsToVisit.empty()) {
+    // for some reason, iterating in DFS order is important for orienting cells
     Dart<D> currDart;
     bool currOrientation;
-    std::tie(currDart, currOrientation) = dartsToVisit.front();
-    dartsToVisit.pop_front();
+    std::tie(currDart, currOrientation) = dartsToVisit.back();
+    dartsToVisit.pop_back();
 
     Cell<k2, D> currCell = currDart.template cell<k2>();
     currCell.setOrientation(currCell.orientation() == currOrientation);
@@ -83,6 +85,24 @@ std::vector<Cell<k2, D>> CombinatorialMap<D>::adjacentCells(Cell<k1, D> cell) co
   }
 
   return neighbors;
+}
+
+template <size_t D>
+template <size_t k>
+std::vector<Vertex<D>> CombinatorialMap<D>::adjacentVertices(Cell<k, D> cell) const {
+  return adjacentCells<k, 0>(cell);
+}
+
+template <size_t D>
+template <size_t k>
+std::vector<Edge<D>> CombinatorialMap<D>::adjacentEdges(Cell<k, D> cell) const {
+  return adjacentCells<k, 1>(cell);
+}
+
+template <size_t D>
+template <size_t k>
+std::vector<Face<D>> CombinatorialMap<D>::adjacentFaces(Cell<k, D> cell) const {
+  return adjacentCells<k, 2>(cell);
 }
 
 template <size_t D>
