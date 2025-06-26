@@ -610,117 +610,265 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<size_t>>& te
 
   cDartArr[0] = std::vector<size_t>(nCellsCount[0], INVALID_IND);
 
-  std::map<std::array<size_t, 3>, size_t> createdDarts;
+  bool fancyMap = true;
+  if (fancyMap) {
 
-  auto shift = [&](std::array<size_t, 3> key) -> std::array<size_t, 3> { return {key[1], key[2], key[0]}; };
-  auto flip = [&](std::array<size_t, 3> key) -> std::array<size_t, 3> { return {key[1], key[0], key[2]}; };
+    // take in canonicalized vertex list, return first dart index, number of shifts to canonicalize, orientation
+    std::map<std::array<size_t, 3>, std::tuple<size_t, int, bool>> createdDarts;
 
-  // TODO: optimize so we don't do 6 lookups per face
-  auto oppDartLookup = [&](std::array<size_t, 3> key) -> size_t {
-    // make sure this face hasn't already appeared with this orientation
-    GC_SAFETY_ASSERT((createdDarts.find(key) == createdDarts.end()) &&
-                         (createdDarts.find(shift(key)) == createdDarts.end()) &&
-                         (createdDarts.find(shift(shift(key))) == createdDarts.end()),
-                     "tet mesh orientation problem: duplicate face {" + std::to_string(key[0]) + ", " +
-                         std::to_string(key[1]) + ", " + std::to_string(key[2]) + "}");
-    auto oppKey = flip(key); // check if this face has appeared with opposite orientation
-    auto keyIter = createdDarts.find(oppKey);
-    if (keyIter != createdDarts.end()) {
-      return keyIter->second;
-    }
-    keyIter = createdDarts.find(shift(oppKey));
-    if (keyIter != createdDarts.end()) {
-      return dartMap[0][dartMap[0][keyIter->second]];
-    }
-    keyIter = createdDarts.find(shift(shift(oppKey)));
-    if (keyIter != createdDarts.end()) {
-      return dartMap[0][keyIter->second];
-    }
-    return INVALID_IND;
-  };
-
-  // === Walk the tets, creating darts. Hook up dartMap[0] and dartMap[1] pointers (halfedges on tet surfaces), but
-  // don't hook up dartMap[2] yet (gluing tets together).
-
-  // The oriented faces of tet {0, 1, 2, 3} are given by {{0, 1, 2}, {0, 2, 3}, {1, 3, 2}, {0, 3, 1}}
-  // We index the tet's halfedges as 0 1 2, 3 4 5, 6 7 8, 9 10 11
-  // The next array is 1 2 0, 4 5 3, 7 8 6, 10 11 9
-  // The twin array is 11 8 3, 2 7 9, 10 4 1, 5 6 0
-  const std::array<std::array<size_t, 3>, 4> tetFaceIndices{
-      std::array<size_t, 3>{0, 1, 2}, std::array<size_t, 3>{0, 2, 3}, std::array<size_t, 3>{1, 3, 2},
-      std::array<size_t, 3>{0, 3, 1}};
-  const std::array<size_t, 12> next{1, 2, 0, 4, 5, 3, 7, 8, 6, 10, 11, 9};
-  const std::array<size_t, 12> twin{11, 8, 3, 2, 7, 9, 10, 4, 1, 5, 6, 0};
-
-  auto attachDartMap2 = [&](size_t iDart, size_t jDart) -> void {
-    dartMap[2][iDart] = jDart;
-    dartMap[2][jDart] = iDart;
-  };
-
-  for (size_t iTet = 0; iTet < tets.size(); iTet++) {
-    const std::vector<size_t>& tet = tets[iTet];
-    size_t iCell3 = getNewCell<3>().getIndex();
-
-    const std::array<std::array<size_t, 3>, 4> tetFaces{
-        std::array<size_t, 3>{tet[0], tet[1], tet[2]}, std::array<size_t, 3>{tet[0], tet[2], tet[3]},
-        std::array<size_t, 3>{tet[1], tet[3], tet[2]}, std::array<size_t, 3>{tet[0], tet[3], tet[1]}};
-
-    std::array<size_t, 12> newDartIndices;
-    for (size_t iDart = 0; iDart < 12; ++iDart) {
-      size_t newDart = getNewDart().getIndex();
-      newDartIndices[iDart] = newDart;
-
-      size_t iV = tetFaces[iDart / 3][iDart % 3];
-      dCellArr[0][newDart] = iV;
-      dCellSgn[0][newDart] = true;
-      cDartArr[0][iV] = newDart;
-    }
-
-    for (size_t iDart = 0; iDart < 12; ++iDart) {
-      dartMap[0][newDartIndices[iDart]] = newDartIndices[next[iDart]];
-      dartMap[1][newDartIndices[iDart]] = newDartIndices[twin[iDart]];
-      dCellArr[3][newDartIndices[iDart]] = iCell3;
-      dCellSgn[3][newDartIndices[iDart]] = true;
-    }
-    cDartArr[3][iCell3] = newDartIndices[0];
-
-    if (DEBUG_PRINT) {
-      for (size_t iDart = 0; iDart < 12; ++iDart) {
-        std::cout << "Dart " << newDartIndices[iDart] << " : " << dCellArr[0][newDartIndices[iDart]] << "->"
-                  << dCellArr[0][dartMap[0][newDartIndices[iDart]]] << std::endl;
+    // turn input list into compute canonicalized vertex list, number of shifts, and orientation
+    struct CanonicalVertexList {
+      std::array<size_t, 3> vertices; // canonical ordering
+      int rotation;                   // how many times to rotate to get from input to canonical
+      bool orientation;               // false <=> input was flipped during canonicalization
+    };
+    auto canonicalize = [](std::array<size_t, 3> face) -> CanonicalVertexList {
+      // find the minimum vertex index
+      size_t minIdx = 0;
+      for (size_t i = 1; i < 3; ++i) {
+        if (face[i] < face[minIdx]) minIdx = i;
       }
-    }
 
-    // glue together opposite faces
-    for (size_t iF = 0; iF < 4; ++iF) {
-      const std::array<size_t, 3> face = tetFaces[iF];
-      size_t twinFaceDart = oppDartLookup(face);
-      if (twinFaceDart == INVALID_IND) {
-        // if the opposite face has not been created, set the dartMap[2] pointers to INVALID_IND
-        for (size_t iD = 0; iD < 3; iD++) dartMap[2][newDartIndices[3 * iF + iD]] = INVALID_IND;
-        createdDarts[face] = newDartIndices[3 * iF];
+      // the two possible orderings starting with the minimum vertex
+      std::array<size_t, 3> order1 = {face[minIdx], face[(minIdx + 1) % 3], face[(minIdx + 2) % 3]};
+      std::array<size_t, 3> order2 = {face[minIdx], face[(minIdx + 2) % 3], face[(minIdx + 1) % 3]};
+
+      // choose the unique ordering where the second vertex is smaller than the third
+      if (order1[1] < order1[2]) {
+        return {order1, static_cast<int>(minIdx), true};
       } else {
-        // if the opposite face has already created, hook up the appropriate pointers
-        attachDartMap2(newDartIndices[3 * iF + 0], twinFaceDart);
-        attachDartMap2(newDartIndices[3 * iF + 2], dartMap[0][twinFaceDart]);
-        attachDartMap2(newDartIndices[3 * iF + 1], dartMap[0][dartMap[0][twinFaceDart]]);
+        // return {order2, static_cast<int>((3 - minIdx) % 3), false};
+        return {order2, static_cast<int>(minIdx), false};
+      }
+    };
 
-        if (DEBUG_PRINT) {
+    auto oppDartLookup = [&](const std::array<size_t, 3>& face, const CanonicalVertexList& canon) -> size_t {
+      auto dartIt = createdDarts.find(canon.vertices);
+      if (dartIt == createdDarts.end()) {
+        return INVALID_IND; // never seen this face with any orientation
+      } else {
+        // make sure this face hasn't already appeared with the same orientation
+        GC_SAFETY_ASSERT(canon.orientation != std::get<2>(dartIt->second),
+                         "tet mesh orientation problem: duplicate face {" + std::to_string(face[0]) + ", " +
+                             std::to_string(face[1]) + ", " + std::to_string(face[2]) + "}");
+
+        int storedRotation = std::get<1>(dartIt->second);
+        int inputRotation = canon.rotation;
+
+        // Since the faces have opposite orientations, we need to account for the reversal
+        int rotationDiff = (5 + inputRotation + storedRotation) % 3; // TODO why is this correct?
+
+        // if (DEBUG_PRINT)
+        //   std::cout << "stored rotation: " << storedRotation << "\t|input rotation: " << inputRotation
+        //             << "\t|diff: " << rotationDiff << std::endl;
+
+        // Apply dartMap[0] the appropriate number of times
+        size_t resultDart = std::get<0>(dartIt->second);
+        for (int i = 0; i < rotationDiff; ++i) {
+          resultDart = dartMap[0][resultDart];
+        }
+
+        return resultDart;
+      }
+    };
+
+    // === Walk the tets, creating darts. Hook up dartMap[0] and dartMap[1] pointers (halfedges on tet surfaces), but
+    // don't hook up dartMap[2] yet (gluing tets together).
+
+    // The oriented faces of tet {0, 1, 2, 3} are given by {{0, 1, 2}, {0, 2, 3}, {1, 3, 2}, {0, 3, 1}}
+    // We index the tet's halfedges as 0 1 2, 3 4 5, 6 7 8, 9 10 11
+    // The next array is 1 2 0, 4 5 3, 7 8 6, 10 11 9
+    // The twin array is 11 8 3, 2 7 9, 10 4 1, 5 6 0
+    const std::array<std::array<size_t, 3>, 4> tetFaceIndices{
+        std::array<size_t, 3>{0, 1, 2}, std::array<size_t, 3>{0, 2, 3}, std::array<size_t, 3>{1, 3, 2},
+        std::array<size_t, 3>{0, 3, 1}};
+    const std::array<size_t, 12> next{1, 2, 0, 4, 5, 3, 7, 8, 6, 10, 11, 9};
+    const std::array<size_t, 12> twin{11, 8, 3, 2, 7, 9, 10, 4, 1, 5, 6, 0};
+
+    auto attachDartMap2 = [&](size_t iDart, size_t jDart) -> void {
+      dartMap[2][iDart] = jDart;
+      dartMap[2][jDart] = iDart;
+    };
+
+    for (size_t iTet = 0; iTet < tets.size(); iTet++) {
+      const std::vector<size_t>& tet = tets[iTet];
+      size_t iCell3 = getNewCell<3>().getIndex();
+
+      const std::array<std::array<size_t, 3>, 4> tetFaces{
+          std::array<size_t, 3>{tet[0], tet[1], tet[2]}, std::array<size_t, 3>{tet[0], tet[2], tet[3]},
+          std::array<size_t, 3>{tet[1], tet[3], tet[2]}, std::array<size_t, 3>{tet[0], tet[3], tet[1]}};
+
+      std::array<size_t, 12> newDartIndices;
+      for (size_t iDart = 0; iDart < 12; ++iDart) {
+        size_t newDart = getNewDart().getIndex();
+        newDartIndices[iDart] = newDart;
+
+        size_t iV = tetFaces[iDart / 3][iDart % 3];
+        dCellArr[0][newDart] = iV;
+        dCellSgn[0][newDart] = true;
+        cDartArr[0][iV] = newDart;
+      }
+
+      for (size_t iDart = 0; iDart < 12; ++iDart) {
+        dartMap[0][newDartIndices[iDart]] = newDartIndices[next[iDart]];
+        dartMap[1][newDartIndices[iDart]] = newDartIndices[twin[iDart]];
+        dCellArr[3][newDartIndices[iDart]] = iCell3;
+        dCellSgn[3][newDartIndices[iDart]] = true;
+      }
+      cDartArr[3][iCell3] = newDartIndices[0];
+
+      // if (DEBUG_PRINT) {
+      //   for (size_t iDart = 0; iDart < 12; ++iDart) {
+      //     std::cout << "Dart " << newDartIndices[iDart] << " : " << dCellArr[0][newDartIndices[iDart]] << "->"
+      //               << dCellArr[0][dartMap[0][newDartIndices[iDart]]] << std::endl;
+      //   }
+      // }
+
+      // glue together opposite faces
+      for (size_t iF = 0; iF < 4; ++iF) {
+        const std::array<size_t, 3> face = tetFaces[iF];
+        CanonicalVertexList canon = canonicalize(face);
+        size_t twinFaceDart = oppDartLookup(face, canon);
+        if (twinFaceDart == INVALID_IND) {
+          // if the opposite face has not been created, set the dartMap[2] pointers to INVALID_IND
+          for (size_t iD = 0; iD < 3; iD++) dartMap[2][newDartIndices[3 * iF + iD]] = INVALID_IND;
+          // createdDarts[face] = newDartIndices[3 * iF];
+          createdDarts[canon.vertices] = std::make_tuple(newDartIndices[3 * iF], canon.rotation, canon.orientation);
+        } else {
+          // if the opposite face has already created, hook up the appropriate pointers
+          attachDartMap2(newDartIndices[3 * iF + 0], twinFaceDart);
+          attachDartMap2(newDartIndices[3 * iF + 2], dartMap[0][twinFaceDart]);
+          attachDartMap2(newDartIndices[3 * iF + 1], dartMap[0][dartMap[0][twinFaceDart]]);
+
+          if (DEBUG_PRINT) {
+            size_t myDart = newDartIndices[3 * iF + 0];
+            size_t oppDart = twinFaceDart;
+            std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
+                      << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
+                      << "[dart " << oppDart << "]" << std::endl;
+            myDart = newDartIndices[3 * iF + 2];
+            oppDart = dartMap[0][twinFaceDart];
+            std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
+                      << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
+                      << "[dart " << oppDart << "]" << std::endl;
+            myDart = newDartIndices[3 * iF + 1];
+            oppDart = dartMap[0][dartMap[0][twinFaceDart]];
+            std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
+                      << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
+                      << "[dart " << oppDart << "]" << std::endl;
+          }
+
           size_t myDart = newDartIndices[3 * iF + 0];
           size_t oppDart = twinFaceDart;
-          std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
-                    << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
-                    << "[dart " << oppDart << "]" << std::endl;
-          myDart = newDartIndices[3 * iF + 2];
-          oppDart = dartMap[0][twinFaceDart];
-          std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
-                    << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
-                    << "[dart " << oppDart << "]" << std::endl;
-          myDart = newDartIndices[3 * iF + 1];
-          oppDart = dartMap[0][dartMap[0][twinFaceDart]];
-          std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
-                    << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
-                    << "[dart " << oppDart << "]" << std::endl;
+          GC_SAFETY_ASSERT(dCellArr[0][myDart] == dCellArr[0][dartMap[0][oppDart]], "dart gluing misaligned");
+        }
+      }
+    }
+  } else {
+    std::map<std::array<size_t, 3>, size_t> createdDarts;
+
+    auto shift = [&](std::array<size_t, 3> key) -> std::array<size_t, 3> { return {key[1], key[2], key[0]}; };
+    auto flip = [&](std::array<size_t, 3> key) -> std::array<size_t, 3> { return {key[1], key[0], key[2]}; };
+
+    auto createdDartLookup = [&](std::array<size_t, 3> key) -> size_t {
+      auto keyIter = createdDarts.find(key);
+      if (keyIter != createdDarts.end()) {
+        return keyIter->second;
+      }
+      keyIter = createdDarts.find(shift(key));
+      if (keyIter != createdDarts.end()) {
+        return dartMap[0][dartMap[0][keyIter->second]];
+      }
+      keyIter = createdDarts.find(shift(shift(key)));
+      if (keyIter != createdDarts.end()) {
+        return dartMap[0][keyIter->second];
+      }
+      return INVALID_IND;
+    };
+
+    // === Walk the tets, creating darts. Hook up dartMap[0] and dartMap[1] pointers (halfedges on tet surfaces), but
+    // don't hook up dartMap[2] yet (gluing tets together).
+
+    // The oriented faces of tet {0, 1, 2, 3} are given by {{0, 1, 2}, {0, 2, 3}, {1, 3, 2}, {0, 3, 1}}
+    // We index the tet's halfedges as 0 1 2, 3 4 5, 6 7 8, 9 10 11
+    // The next array is 1 2 0, 4 5 3, 7 8 6, 10 11 9
+    // The twin array is 11 8 3, 2 7 9, 10 4 1, 5 6 0
+    const std::array<std::array<size_t, 3>, 4> tetFaceIndices{
+        std::array<size_t, 3>{0, 1, 2}, std::array<size_t, 3>{0, 2, 3}, std::array<size_t, 3>{1, 3, 2},
+        std::array<size_t, 3>{0, 3, 1}};
+    const std::array<size_t, 12> next{1, 2, 0, 4, 5, 3, 7, 8, 6, 10, 11, 9};
+    const std::array<size_t, 12> twin{11, 8, 3, 2, 7, 9, 10, 4, 1, 5, 6, 0};
+
+    auto attachDartMap2 = [&](size_t iDart, size_t jDart) -> void {
+      dartMap[2][iDart] = jDart;
+      dartMap[2][jDart] = iDart;
+    };
+
+    for (size_t iTet = 0; iTet < tets.size(); iTet++) {
+      const std::vector<size_t>& tet = tets[iTet];
+      size_t iCell3 = getNewCell<3>().getIndex();
+
+      const std::array<std::array<size_t, 3>, 4> tetFaces{
+          std::array<size_t, 3>{tet[0], tet[1], tet[2]}, std::array<size_t, 3>{tet[0], tet[2], tet[3]},
+          std::array<size_t, 3>{tet[1], tet[3], tet[2]}, std::array<size_t, 3>{tet[0], tet[3], tet[1]}};
+
+      std::array<size_t, 12> newDartIndices;
+      for (size_t iDart = 0; iDart < 12; ++iDart) {
+        size_t newDart = getNewDart().getIndex();
+        newDartIndices[iDart] = newDart;
+
+        size_t iV = tetFaces[iDart / 3][iDart % 3];
+        dCellArr[0][newDart] = iV;
+        dCellSgn[0][newDart] = true;
+        cDartArr[0][iV] = newDart;
+      }
+
+      for (size_t iDart = 0; iDart < 12; ++iDart) {
+        dartMap[0][newDartIndices[iDart]] = newDartIndices[next[iDart]];
+        dartMap[1][newDartIndices[iDart]] = newDartIndices[twin[iDart]];
+        dCellArr[3][newDartIndices[iDart]] = iCell3;
+        dCellSgn[3][newDartIndices[iDart]] = true;
+      }
+      cDartArr[3][iCell3] = newDartIndices[0];
+
+      if (DEBUG_PRINT) {
+        for (size_t iDart = 0; iDart < 12; ++iDart) {
+          std::cout << "Dart " << newDartIndices[iDart] << " : " << dCellArr[0][newDartIndices[iDart]] << "->"
+                    << dCellArr[0][dartMap[0][newDartIndices[iDart]]] << std::endl;
+        }
+      }
+
+      // glue together opposite faces
+      for (size_t iF = 0; iF < 4; ++iF) {
+        const std::array<size_t, 3> face = tetFaces[iF];
+        size_t twinFaceDart = createdDartLookup(flip(face));
+        if (twinFaceDart == INVALID_IND) {
+          // if the opposite face has not been created, set the dartMap[2] pointers to INVALID_IND
+          for (size_t iD = 0; iD < 3; iD++) dartMap[2][newDartIndices[3 * iF + iD]] = INVALID_IND;
+          createdDarts[face] = newDartIndices[3 * iF];
+        } else {
+          // if the opposite face has already created, hook up the appropriate pointers
+          attachDartMap2(newDartIndices[3 * iF + 0], twinFaceDart);
+          attachDartMap2(newDartIndices[3 * iF + 2], dartMap[0][twinFaceDart]);
+          attachDartMap2(newDartIndices[3 * iF + 1], dartMap[0][dartMap[0][twinFaceDart]]);
+
+          if (DEBUG_PRINT) {
+            size_t myDart = newDartIndices[3 * iF + 0];
+            size_t oppDart = twinFaceDart;
+            std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
+                      << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
+                      << "[dart " << oppDart << "]" << std::endl;
+            myDart = newDartIndices[3 * iF + 2];
+            oppDart = dartMap[0][twinFaceDart];
+            std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
+                      << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
+                      << "[dart " << oppDart << "]" << std::endl;
+            myDart = newDartIndices[3 * iF + 1];
+            oppDart = dartMap[0][dartMap[0][twinFaceDart]];
+            std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
+                      << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
+                      << "[dart " << oppDart << "]" << std::endl;
+          }
         }
       }
     }
