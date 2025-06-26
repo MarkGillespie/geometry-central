@@ -615,16 +615,24 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<size_t>>& te
   auto shift = [&](std::array<size_t, 3> key) -> std::array<size_t, 3> { return {key[1], key[2], key[0]}; };
   auto flip = [&](std::array<size_t, 3> key) -> std::array<size_t, 3> { return {key[1], key[0], key[2]}; };
 
-  auto createdDartLookup = [&](std::array<size_t, 3> key) -> size_t {
-    auto keyIter = createdDarts.find(key);
+  // TODO: optimize so we don't do 6 lookups per face
+  auto oppDartLookup = [&](std::array<size_t, 3> key) -> size_t {
+    // make sure this face hasn't already appeared with this orientation
+    GC_SAFETY_ASSERT((createdDarts.find(key) == createdDarts.end()) &&
+                         (createdDarts.find(shift(key)) == createdDarts.end()) &&
+                         (createdDarts.find(shift(shift(key))) == createdDarts.end()),
+                     "tet mesh orientation problem: duplicate face {" + std::to_string(key[0]) + ", " +
+                         std::to_string(key[1]) + ", " + std::to_string(key[2]) + "}");
+    auto oppKey = flip(key); // check if this face has appeared with opposite orientation
+    auto keyIter = createdDarts.find(oppKey);
     if (keyIter != createdDarts.end()) {
       return keyIter->second;
     }
-    keyIter = createdDarts.find(shift(key));
+    keyIter = createdDarts.find(shift(oppKey));
     if (keyIter != createdDarts.end()) {
       return dartMap[0][dartMap[0][keyIter->second]];
     }
-    keyIter = createdDarts.find(shift(shift(key)));
+    keyIter = createdDarts.find(shift(shift(oppKey)));
     if (keyIter != createdDarts.end()) {
       return dartMap[0][keyIter->second];
     }
@@ -686,7 +694,7 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<size_t>>& te
     // glue together opposite faces
     for (size_t iF = 0; iF < 4; ++iF) {
       const std::array<size_t, 3> face = tetFaces[iF];
-      size_t twinFaceDart = createdDartLookup(flip(face));
+      size_t twinFaceDart = oppDartLookup(face);
       if (twinFaceDart == INVALID_IND) {
         // if the opposite face has not been created, set the dartMap[2] pointers to INVALID_IND
         for (size_t iD = 0; iD < 3; iD++) dartMap[2][newDartIndices[3 * iF + iD]] = INVALID_IND;
