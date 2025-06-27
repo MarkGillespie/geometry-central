@@ -45,6 +45,12 @@ struct OrbitNeighborhoodIterator;
 template <size_t D, size_t k>
 class OrbitNeighborhood;
 
+template <std::size_t D, typename T>
+struct NestedVectorImpl;
+
+// = std::vector<std::vector<...<T>> nested to depth D
+template <std::size_t D, typename T>
+using NestedVector = typename NestedVectorImpl<D, T>::type;
 
 // ==========================================================
 // ================    Combinatorial Map   ==================
@@ -54,7 +60,11 @@ template <size_t D>
 class CombinatorialMap {
 
 public:
-  CombinatorialMap(const std::vector<std::vector<size_t>>& cells);
+  // Construct a simplicial complex from a list of oriented simplices
+  CombinatorialMap(const std::vector<std::array<size_t, D + 1>>& cells);
+
+  // Construct a cell complex given as a list of (D-1)-complexes
+  CombinatorialMap(const NestedVector<D, size_t>& cells);
 
   virtual ~CombinatorialMap();
 
@@ -282,6 +292,18 @@ protected:
   template <size_t k, size_t D1>
   friend struct CellRangeF;
 };
+
+
+template <std::size_t D, typename T> // Recursive template struct for nested lists
+struct NestedVectorImpl {
+  using type = std::vector<typename NestedVectorImpl<D - 1, T>::type>;
+};
+
+template <typename T> // Base case specialization for D = 0
+struct NestedVectorImpl<0, T> {
+  using type = T;
+};
+
 
 } // namespace combinatorial_map
 } // namespace geometrycentral

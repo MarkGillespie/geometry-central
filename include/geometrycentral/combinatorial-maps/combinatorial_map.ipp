@@ -597,11 +597,10 @@ CombinatorialMap<2>::CombinatorialMap(const std::vector<std::vector<size_t>>& po
 
 // Builds a tet mesh
 template <>
-CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<size_t>>& tets) {
+CombinatorialMap<3>::CombinatorialMap(const std::vector<std::array<size_t, 4>>& tets) {
   const bool DEBUG_PRINT = false;
   nCellsCount[0] = 0;
-  for (const std::vector<size_t>& tet : tets) {
-    GC_SAFETY_ASSERT(tet.size() == 4, "CombinatorialMap<3> can only construct tet meshes from a list of cell vertices");
+  for (const std::array<size_t, 4>& tet : tets) {
     for (size_t i : tet) {
       nCellsCount[0] = std::max(nCellsCount[0], i);
     }
@@ -690,8 +689,7 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<size_t>>& te
       dartMap[2][jDart] = iDart;
     };
 
-    for (size_t iTet = 0; iTet < tets.size(); iTet++) {
-      const std::vector<size_t>& tet = tets[iTet];
+    for (const std::array<size_t, 4>& tet : tets) {
       size_t iCell3 = getNewCell<3>().getIndex();
 
       const std::array<std::array<size_t, 3>, 4> tetFaces{
@@ -805,7 +803,7 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<size_t>>& te
     };
 
     for (size_t iTet = 0; iTet < tets.size(); iTet++) {
-      const std::vector<size_t>& tet = tets[iTet];
+      const std::array<size_t, 4>& tet = tets[iTet];
       size_t iCell3 = getNewCell<3>().getIndex();
 
       const std::array<std::array<size_t, 3>, 4> tetFaces{
