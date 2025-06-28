@@ -559,6 +559,7 @@ template <>
 CombinatorialMap<2>::CombinatorialMap(const std::vector<std::vector<size_t>>& polygons) {
   surface::ManifoldSurfaceMesh mesh(polygons);
 
+  // TODO: fill out other nCellsCount
   nCellsCount[0] = mesh.nVertices();
   nDartsCount = mesh.nHalfedges();
   nCellsCapacityCount[0] = nCellsCount[0];
@@ -594,6 +595,231 @@ CombinatorialMap<2>::CombinatorialMap(const std::vector<std::vector<size_t>>& po
     cDartArr[0].push_back(hIdx[v.halfedge()]);
   }
 }
+
+constexpr size_t halfFactorial(size_t n) {
+  size_t res = 1;
+  for (size_t i = 3; i <= n; ++i) res *= i;
+  return res;
+}
+
+// generate a list of the n!/2 positive permutations on [0, ..., n-1], listed in lexicographic order
+template <size_t n>
+constexpr std::array<std::array<size_t, n>, halfFactorial(n)> listPositivePermutations() {
+  std::array<std::array<size_t, n>, halfFactorial(n)> result;
+
+  std::array<size_t, n> perm; // Create initial permutation [0, ..., n-1]
+  for (size_t i = 0; i < n; ++i) perm[i] = i;
+
+  // Helper function to compute sign of permutation
+  auto computeSign = [](const std::array<size_t, n>& p) -> int {
+    size_t inversions = 0;
+
+    // Count inversions: pairs (i,j) where i < j but p[i] > p[j]
+    for (size_t i = 0; i < n - 1; ++i) {
+      for (size_t j = i + 1; j < n; ++j) {
+        if (p[i] > p[j]) ++inversions;
+      }
+    }
+
+    return (inversions % 2 == 0) ? 1 : -1; // Sign is +1 if even number of inversions, -1 if odd
+  };
+
+  // List all permutations and keep only positive ones
+  size_t iP = 0; // index of current permutation
+  do {
+    if (computeSign(perm) == 1) result[iP++] = perm;
+  } while (std::next_permutation(perm.begin(), perm.end()));
+
+  return result;
+}
+
+// construct dart maps for D-simplex with our chosen dart ordering
+// D-simplex has D-1 dart maps for its (D+1)!/2 darts
+template <size_t D>
+constexpr std::array<std::array<size_t, halfFactorial(D + 1)>, D - 1> simplexDartMaps() {
+  // darts on a D-simplex are in 1-1 correspondence with positive permutations on D+1 elements
+  std::array<std::array<size_t, D + 1>, halfFactorial(D + 1)> positivePermutations = listPositivePermutations<D + 1>();
+
+  auto permIndex = [&positivePermutations](const std::array<size_t, D + 1>& perm) -> size_t {
+    // Use std::lower_bound with lexicographic comparison
+    auto it = std::lower_bound(positivePermutations.begin(), positivePermutations.end(), perm);
+
+    // Check if we found the permutation
+    if (it != positivePermutations.end() && *it == perm) return std::distance(positivePermutations.begin(), it);
+
+    return INVALID_IND; // Permutation not found
+  };
+
+  auto shiftFirstThreeIndices = [](const std::array<size_t, D + 1>& perm) -> std::array<size_t, D + 1> {
+    std::array<size_t, D + 1> result = perm;
+    result[0] = perm[1], result[1] = perm[2], result[2] = perm[0];
+    return result;
+  };
+
+  auto swapIndexPairs = [](std::array<size_t, D + 1> perm, std::array<size_t, 2> i,
+                           std::array<size_t, 2> j) -> std::array<size_t, D + 1> {
+    std::swap(perm[i[0]], perm[i[1]]);
+    std::swap(perm[j[0]], perm[j[1]]);
+    return perm;
+  };
+
+  std::array<std::array<size_t, halfFactorial(D + 1)>, D - 1> dartMaps;
+
+  for (size_t iDart = 0; iDart < halfFactorial(D + 1); iDart++) {
+    // next map: cyclic shift first 3 indices
+    dartMaps[0][iDart] = permIndex(shiftFirstThreeIndices(positivePermutations[iDart]));
+
+    // other maps: swap two pairs of indices
+    for (size_t dim = 1; dim < D; dim++) {
+      dartMaps[dim][iDart] = permIndex(swapIndexPairs(positivePermutations[iDart], {0, 1}, {dim + 1, dim + 2}));
+    }
+  }
+
+  return dartMaps;
+}
+
+template <> // simplexDartMaps<3>()
+constexpr std::array<std::array<size_t, 12>, 2> simplexDartMaps<3>() {
+  return {
+      std::array<size_t, 12>{4, 8, 10, 2, 6, 11, 0, 5, 9, 1, 3, 7}, // dartMap[0]
+      std::array<size_t, 12>{3, 6, 9, 0, 7, 10, 1, 4, 11, 2, 5, 8}  // dartMap[1]
+  };
+}
+
+/*
+template <size_t D>
+CombinatorialMap<D>::CombinatorialMap(const std::vector<std::array<size_t, D + 1>>& simplices) {
+const bool DEBUG_PRINT = false;
+
+// darts on a D-simplex are in 1-1 correspondence with positive permutations on D+1 elements
+std::array<std::array<size_t, D + 1>, halfFactorial(D + 1)> positivePermutations = listPositivePermutations<D + 1>();
+
+nCellsCount[0] = 0;
+for (const std::array<size_t, D + 1>& simplex : simplices) {
+  for (size_t i : simplex) {
+    nCellsCount[0] = std::max(nCellsCount[0], i);
+  }
+}
+nCellsCount[0]++; // 0-based means count is max + 1
+nCellsCount[D] = simplices.size();
+
+cDartArr[0] = std::vector<size_t>(nCellsCount[0], INVALID_IND);
+
+// the number of darts in a D-simplex is (D+1)! / 2:
+// a k-simplex has (k+1) top-dimensional faces, each of which has (k-1) top-dimensional faces, all the way down to a
+// 1-simplex which has 1 dart
+constexpr size_t nSimplexDarts = halfFactorial(D + 1);
+if (DEBUG_PRINT) {
+  std::cout << "nSimplexDarts = " << nSimplexDarts << std::endl;
+  std::cout << "n simplices = " << simplices.size() << std::endl;
+  std::cout << "predicted number of darts = " << nSimplexDarts * simplices.size() << std::endl;
+}
+
+// === Walk the tets, creating darts. Hook up dartMap[0] and dartMap[1] pointers (halfedges on tet surfaces), but
+// don't hook up dartMap[2] yet (gluing tets together).
+std::array<std::array<size_t, nSimplexDarts>, D - 1> faceDartMaps = simplexDartMaps<D>();
+
+bool printSimplexMaps = true;
+if (printSimplexMaps) {
+  std::cout << "template <> // simplexDartMaps<" << D << ">()" << std::endl;
+  std::cout << "constexpr std::array<std::array<size_t, " << nSimplexDarts << ">," << (D - 1) << "> simplexDartMaps<"
+            << D << ">() {" << std::endl;
+  std::cout << "\treturn {" << std::endl;
+  for (size_t dim = 0; dim < D - 1; dim++) {
+    std::cout << "\t\tstd::array<size_t, " << nSimplexDarts << ">{";
+    for (size_t iDart = 0; iDart < nSimplexDarts; iDart++) {
+      std::cout << faceDartMaps[dim][iDart];
+      if (iDart + 1 < nSimplexDarts) std::cout << ", ";
+    }
+    std::cout << "}";
+    if (dim + 1 < D - 1) std::cout << ",";
+    std::cout << " // dartMap[" << dim << "]";
+    std::cout << std::endl;
+  }
+  std::cout << "\t};" << std::endl << "}" << std::endl;
+}
+
+// The oriented faces of tet {0, 1, 2, 3} are given by {{0, 1, 2}, {0, 2, 3}, {1, 3, 2}, {0, 3, 1}}
+// We index the tet's halfedges as 0 1 2, 3 4 5, 6 7 8, 9 10 11
+// The next array is 1 2 0, 4 5 3, 7 8 6, 10 11 9
+// The twin array is 11 8 3, 2 7 9, 10 4 1, 5 6 0
+const std::array<std::array<size_t, 3>, 4> tetFaceIndices{
+    std::array<size_t, 3>{0, 1, 2}, std::array<size_t, 3>{0, 2, 3}, std::array<size_t, 3>{1, 3, 2},
+    std::array<size_t, 3>{0, 3, 1}};
+const std::array<size_t, 12> next{1, 2, 0, 4, 5, 3, 7, 8, 6, 10, 11, 9};
+const std::array<size_t, 12> twin{11, 8, 3, 2, 7, 9, 10, 4, 1, 5, 6, 0};
+
+auto attachTopDartMap = [&](size_t iDart, size_t jDart) -> void {
+  dartMap[D - 1][iDart] = jDart;
+  dartMap[D - 1][jDart] = iDart;
+};
+
+std::map<std::array<size_t, D>, size_t> createdDarts;
+std::map<size_t, size_t> dartTipVertex; // TODO: delet this
+
+for (const std::array<size_t, D + 1>& simplex : simplices) {
+  size_t iCellD = getNewCell<D>().getIndex();
+  std::array<size_t, nSimplexDarts> newDartIndices;
+  for (size_t iDart = 0; iDart < nSimplexDarts; iDart++) {
+    newDartIndices[iDart] = getNewDart().getIndex();
+  }
+  for (size_t iDart = 0; iDart < nSimplexDarts; iDart++) {
+    size_t newDart = newDartIndices[iDart];
+    const std::array<size_t, D + 1>& perm = positivePermutations[iDart]; // permutation representation
+    dCellArr[0][newDart] = simplex[perm[0]];
+    cDartArr[0][dCellArr[0][newDart]] = newDart;
+    dCellArr[D][newDart] = iCellD;
+    cDartArr[D][dCellArr[D][newDart]] = newDart;
+
+    // DEBUG
+    dartTipVertex[newDart] = simplex[perm[1]];
+
+    for (size_t dim = 0; dim < D - 1; dim++) { // set dart maps 0 .. D-2 from faceDartMaps
+      // std::cout << "dim = " << dim << " of " << dartMap.size() << std::endl;
+      // std::cout << "global dart id = " << (nSimplexDarts * iCellD + iDart) << " of " << dartMap[dim].size()
+      //           << std::endl;
+      // std::cout << "local dart id = " << iDart << " of " << faceDartMaps[dim].size() << std::endl;
+      dartMap[dim][newDart] = newDartIndices[faceDartMaps[dim][iDart]];
+    }
+    // set dartMap[D-1] by searching for codimension-1 face to glue to
+    std::array<size_t, D> key;
+    for (size_t dim = 0; dim < D; dim++) key[dim] = simplex[perm[dim]];
+    auto topTwin = createdDarts.find(key);
+    if (topTwin == createdDarts.end()) {
+      std::swap(key[0], key[1]);
+      createdDarts[key] = newDart;
+      dartMap[D - 1][newDart] = INVALID_IND; // set dartMap to INVALID_IND in case neighbor is never made
+    } else {
+      attachTopDartMap(newDart, topTwin->second);
+    }
+  }
+}
+
+
+if (DEBUG_PRINT) {
+  for (size_t iD = 0; iD < nDarts(); iD++) {
+    std::cout << "Dart " << iD << " : " << dCellArr[0][iD] << "->" << dartTipVertex[iD] << std::endl;
+    // std::cout << " (next says) : " << dCellArr[0][iD] << "->" << dCellArr[0][dartMap[0][iD]] << std::endl;
+  }
+  for (size_t dim = 0; dim < D; dim++) {
+    for (size_t iDart = 0; iDart < nDarts(); iDart++) {
+      std::cout << "dart " << iDart << " : dartMap[" << dim << "][" << iDart << "] = " << dartMap[dim][iDart]
+                << std::endl;
+    }
+    std::cout << std::endl;
+  }
+}
+
+nCellsCapacityCount[0] = nCellsCount[0];
+nCellsFillCount[0] = nCellsCount[0];
+nDartsCapacityCount = nDartsCount;
+nDartsFillCount = nDartsCount;
+
+// construct 1-cells and 2-cells
+indexCells<1>();
+indexCells<2>();
+}
+*/
 
 // Builds a tet mesh
 template <>
@@ -917,7 +1143,8 @@ void CombinatorialMap<D>::validateConnectivity() {
 
   // == Darts
   // Check valid pointers
-  // Note: we intentionally mostly avoid using iterators here, because they can be hard to debug when things are broken.
+  // Note: we intentionally mostly avoid using iterators here, because they can be hard to debug when things are
+  // broken.
   for (size_t iDart = 0; iDart < nDartsFillCount; iDart++) {
     assert(!dartIsDead(iDart)); // no darts should be dead yet
     if (dartIsDead(iDart)) continue;
