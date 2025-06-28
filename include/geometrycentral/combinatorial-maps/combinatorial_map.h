@@ -196,7 +196,7 @@ public:
   // Performs a sanity checks on dart structure; throws on fail
   void validateConnectivity();
 
-  // index k-cells and fill cDartArr[k] and dCellArr[*][k] based off of dartMap
+  // index k-cells and fill cDartArr[k] and dCellArr[k] based off of dartMap
   template <size_t k>
   void indexCells();
 
