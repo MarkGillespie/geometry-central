@@ -741,8 +741,8 @@ CombinatorialMap<D>::CombinatorialMap(const std::vector<std::array<size_t, D + 1
   for (const std::array<size_t, D + 1>& simplex : simplices) {
     size_t iCellD = getNewCell<D>().getIndex();
     std::array<size_t, nSimplexDarts> newDartIndices; // index new darts
+    // set dartMap[0..D-2], dCellArr[0 and D], cDartArr[0 and D] for new dart, and dCellSgn[0 and D]
     for (size_t iDart = 0; iDart < nSimplexDarts; iDart++) newDartIndices[iDart] = getNewDart().getIndex();
-    // set dartMap[0..D-1], dCellArr[0 and D], cDartArr[0 and D] for new dart, and dCellSgn[0 and D]
     for (size_t iDart = 0; iDart < nSimplexDarts; iDart++) {
       size_t newDart = newDartIndices[iDart];
       const std::array<size_t, D + 1>& perm = positivePermutations[iDart]; // permutation representation of dart
@@ -757,9 +757,13 @@ CombinatorialMap<D>::CombinatorialMap(const std::vector<std::array<size_t, D + 1
 
       for (size_t dim = 0; dim < D - 1; dim++) // set dart maps 0 .. D-2 from faceDartMaps
         dartMap[dim][newDart] = newDartIndices[faceDartMaps[dim][iDart]];
+    }
+    // take care of dartMap[D-1] in a separate loop so we can use values of dartMap[0]
+    for (size_t iDart = 0; iDart < nSimplexDarts; iDart++) {
+      size_t newDart = newDartIndices[iDart];
       if (dartMap[D - 1][newDart] == INVALID_IND) {
-        // set dartMap[D-1] by searching for codimension-1 face to glue to
-        std::array<size_t, D> key;
+        const std::array<size_t, D + 1>& perm = positivePermutations[iDart]; // permutation representation of dart
+        std::array<size_t, D> key;                                           // search for codimension-1 face to glue to
         for (size_t dim = 0; dim < D; dim++) key[dim] = simplex[perm[dim]];
         auto topTwin = createdDarts.find(key);
         if (topTwin == createdDarts.end()) { // if partner(D-1) has not been created, save dart to map
@@ -767,8 +771,8 @@ CombinatorialMap<D>::CombinatorialMap(const std::vector<std::array<size_t, D + 1
           createdDarts[key] = newDart;
         } else { // otherwise fill in partner(D-1) for this dart, and its next and next.next
           attachTopDartMap(newDart, topTwin->second);
-          // attachTopDartMap(dartMap[0][newDart], dartMap[0][dartMap[0][topTwin->second]]);
-          // attachTopDartMap(dartMap[0][dartMap[0][newDart]], dartMap[0][topTwin->second]);
+          attachTopDartMap(dartMap[0][newDart], dartMap[0][dartMap[0][topTwin->second]]);
+          attachTopDartMap(dartMap[0][dartMap[0][newDart]], dartMap[0][topTwin->second]);
         }
       }
     }
