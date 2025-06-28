@@ -39,10 +39,10 @@ using DartData = MeshData<Dart<D>, T>;
 template <size_t D>
 class CombinatorialMap;
 
-template <size_t D, size_t k>
+template <size_t D>
 struct OrbitNeighborhoodIterator;
 
-template <size_t D, size_t k>
+template <size_t D>
 class OrbitNeighborhood;
 
 template <std::size_t D, typename T>
@@ -188,8 +188,7 @@ public:
   // can be used as `for (std::pair<Dart<D>, bool> neighbor : mesh.orbitNeighbors<k>(dart)) { ... }`,
   // where the first component is the neighboring dart, and the second component is the relative orientation of the dart
   // compared to `d`
-  template <size_t k>
-  OrbitNeighborhood<D, k> orbitNeighbors(Dart<D> d) const;
+  OrbitNeighborhood<D> orbitNeighbors(Dart<D> d, size_t k) const;
 
   // == Debugging, etc
 
@@ -197,8 +196,7 @@ public:
   void validateConnectivity();
 
   // index k-cells and fill cDartArr[k] and dCellArr[k] based off of dartMap
-  template <size_t k>
-  void indexCells();
+  void indexCells(size_t k);
 
 protected:
   // Constructor used by subclasses
@@ -259,6 +257,8 @@ protected:
 
   template <size_t k>
   Cell<k, D> getNewCell();
+
+  size_t getNewCellIndex(size_t k); // equal to getNewCell<k>().index()
 
   // Detect dead elements
   bool dartIsDead(size_t iD) const;
