@@ -66,7 +66,7 @@ public:
   // Construct a cell complex given as a list of (D-1)-complexes
   CombinatorialMap(const NestedVector<D, size_t>& cells);
 
-  virtual ~CombinatorialMap();
+  ~CombinatorialMap();
 
 
   // Number of mesh elements of each type
@@ -130,7 +130,6 @@ public:
   std::vector<std::vector<size_t>> getCellVertexList();
 
   std::unique_ptr<CombinatorialMap> copy() const;
-  virtual std::unique_ptr<CombinatorialMap> copyToCombinatorialMap() const;
   // std::unique_ptr<ManifoldCombinatorialMap> toManifoldMesh();
 
   // Compress the mesh
@@ -293,6 +292,8 @@ protected:
   friend struct CellRangeF;
 };
 
+template <size_t D>
+std::array<std::vector<size_t>, D> constructDartMaps(const NestedVector<D, size_t>& cells);
 
 template <std::size_t D, typename T> // Recursive template struct for nested lists
 struct NestedVectorImpl {

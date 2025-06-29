@@ -419,11 +419,6 @@ CombinatorialMap<D>::~CombinatorialMap() {
 
 template <size_t D>
 std::unique_ptr<CombinatorialMap<D>> CombinatorialMap<D>::copy() const {
-  return copyToCombinatorialMap();
-}
-
-template <size_t D>
-std::unique_ptr<CombinatorialMap<D>> CombinatorialMap<D>::copyToCombinatorialMap() const {
   CombinatorialMap<D>* newMesh = new CombinatorialMap<D>();
   copyInternalFields(*newMesh);
   return std::unique_ptr<CombinatorialMap<D>>(newMesh);
@@ -824,6 +819,197 @@ CombinatorialMap<D>::CombinatorialMap(const std::vector<std::array<size_t, D + 1
   for (size_t k = 1; k < D; k++) indexCells(k);
 }
 
+// Builds a 3D volume mesh
+template <>
+CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<std::vector<size_t>>>& cells) {
+  const bool DEBUG_PRINT = true;
+  nCellsCount[0] = 0;
+  for (const std::vector<std::vector<size_t>>& cell : cells) {
+    for (const std::vector<size_t>& face : cell) {
+      for (size_t i : face) nCellsCount[0] = std::max(nCellsCount[0], i);
+    }
+  }
+  nCellsCount[0]++; // 0-based means count is max + 1
+
+  cDartArr[0] = std::vector<size_t>(nCellsCount[0], INVALID_IND);
+
+  // take in canonicalized vertex list, return first dart index, number of shifts to canonicalize, orientation
+  std::map<std::vector<size_t>, std::tuple<size_t, int, bool>> createdDarts;
+
+  // turn input list into canonicalized vertex list, number of shifts, and orientation
+  struct CanonicalVertexList {
+    std::vector<size_t> vertices; // canonical ordering
+    int rotation;                 // how many times to rotate to get from input to canonical
+    bool orientation;             // false <=> input was flipped during canonicalization
+  };
+  auto canonicalize = [](std::vector<size_t> face) -> CanonicalVertexList {
+    size_t degree = face.size();
+
+    // find the minimum vertex index
+    size_t minIdx = 0;
+    for (size_t i = 1; i < degree; ++i) {
+      if (face[i] < face[minIdx]) minIdx = i;
+    }
+
+    // there are two possible orderings starting with the minimum vertex
+    // choose the unique ordering where the second vertex is smaller than the last
+    std::vector<size_t> result;
+    result.reserve(degree);
+    if (face[(minIdx + 1) % degree] < face[(minIdx + degree - 1) % degree]) {
+      for (size_t i = 0; i < degree; i++) result.push_back(face[(minIdx + i) % degree]); // f[minIdx], f[minIdx+1],...
+      return {result, static_cast<int>(minIdx), true};
+    } else {
+      for (size_t i = 0; i < degree; i++)
+        result.push_back(face[(minIdx + degree - i) % degree]); // f[minIdx], f[minIdx-1],...
+      return {result, static_cast<int>(minIdx), false};
+    }
+  };
+
+  auto oppDartLookup = [&](const std::vector<size_t>& face, const CanonicalVertexList& canon) -> size_t {
+    size_t degree = face.size();
+    auto dartIt = createdDarts.find(canon.vertices);
+    if (dartIt == createdDarts.end()) {
+      return INVALID_IND; // never seen this face with any orientation
+    } else {
+      // make sure this face hasn't already appeared with the same orientation
+      GC_SAFETY_ASSERT(canon.orientation != std::get<2>(dartIt->second),
+                       "tet mesh orientation problem: duplicate face {" + std::to_string(face[0]) + ", " +
+                           std::to_string(face[1]) + ", " + std::to_string(face[2]) + "}");
+
+      int storedRotation = std::get<1>(dartIt->second);
+      int inputRotation = canon.rotation;
+
+      // Since the faces have opposite orientations, we need to account for the reversal
+      int rotationDiff = (degree - 1 + inputRotation + storedRotation) % degree; // TODO why is this correct?
+
+      // if (DEBUG_PRINT)
+      //   std::cout << "stored rotation: " << storedRotation << "\t|input rotation: " << inputRotation
+      //             << "\t|diff: " << rotationDiff << std::endl;
+
+      // Apply dartMap[0] the appropriate number of times
+      size_t resultDart = std::get<0>(dartIt->second);
+      for (int i = 0; i < rotationDiff; ++i) {
+        resultDart = dartMap[0][resultDart];
+      }
+
+      return resultDart;
+    }
+  };
+
+  auto attachDartMap2 = [&](size_t iDart, size_t jDart) -> void {
+    dartMap[2][iDart] = jDart;
+    dartMap[2][jDart] = iDart;
+  };
+
+  for (size_t iC = 0; iC < cells.size(); iC++) {
+    const std::vector<std::vector<size_t>>& cell = cells[iC];
+    size_t iCell3 = getNewCell<3>().getIndex();
+
+    // construct new darts, set cDartArr[0], dCellArr/dCellSign[0 and 3]
+    std::vector<std::vector<size_t>> newDartIndices(cell.size());
+    for (size_t iF = 0; iF < cell.size(); iF++) {
+      const std::vector<size_t>& face = cell[iF];
+      newDartIndices[iF].reserve(face.size());
+      for (size_t iD = 0; iD < face.size(); iD++) {
+        size_t newDart = getNewDart().getIndex();
+        newDartIndices[iF].push_back(newDart);
+
+        cDartArr[0][face[iD]] = newDart;
+        dCellArr[0][newDart] = face[iD];
+        dCellSgn[0][newDart] = true;
+        dCellArr[3][newDart] = iCell3;
+        dCellSgn[3][newDart] = true;
+      }
+    }
+    cDartArr[3][iCell3] = newDartIndices[0][0];
+
+    // fill in dartMap[0][newDart] and dartMap[1][newDart] using cell's next and twin maps
+    // map std::minmax(dart.tailvertex, dart.tipvertex) -> (dart id, dart orientation), helps construct twin map
+    std::map<std::pair<size_t, size_t>, std::pair<size_t, bool>> cellDarts;
+    for (size_t iF = 0; iF < cell.size(); iF++) {
+      const std::vector<size_t>& face = cell[iF];
+      for (size_t iD = 0; iD < face.size(); iD++) {
+        size_t dart = newDartIndices[iF][iD], next = newDartIndices[iF][(iD + 1) % face.size()];
+        dartMap[0][dart] = next; // set next() to next dart around face
+        size_t vTail = dCellArr[0][dart], vTip = dCellArr[0][next];
+        std::pair<size_t, size_t> key = std::minmax(vTail, vTip);
+        auto itTwin = cellDarts.find(key);
+        if (itTwin != cellDarts.end()) { // found another dart along this edge
+          GC_SAFETY_ASSERT((vTail < vTip) != itTwin->second.second, "cell orientation error: " + std::to_string(vTail) +
+                                                                        "->" + std::to_string(vTip) +
+                                                                        " appears twice in cell " + std::to_string(iC));
+          dartMap[1][dart] = itTwin->second.first;
+          dartMap[1][itTwin->second.first] = dart;
+        } else { // first time seeing this edge, save dart
+          cellDarts[key] = std::make_pair(dart, (vTail < vTip));
+        }
+      }
+    }
+
+    if (DEBUG_PRINT) {
+      for (size_t iF = 0; iF < cell.size(); iF++) {
+        const std::vector<size_t>& face = cell[iF];
+        for (size_t iD = 0; iD < face.size(); ++iD) {
+          std::cout << "Dart " << newDartIndices[iF][iD] << " : " << dCellArr[0][newDartIndices[iF][iD]] << "->"
+                    << dCellArr[0][dartMap[0][newDartIndices[iF][iD]]] << std::endl;
+        }
+      }
+    }
+
+    // glue together opposite faces
+    for (size_t iF = 0; iF < cell.size(); ++iF) {
+      const std::vector<size_t> face = cell[iF];
+      CanonicalVertexList canon = canonicalize(face);
+      size_t twinFaceDart = oppDartLookup(face, canon);
+      if (twinFaceDart == INVALID_IND) {
+        // if the opposite face has not been created, set the dartMap[2] pointers to INVALID_IND
+        for (size_t iD = 0; iD < face.size(); iD++) dartMap[2][newDartIndices[iF][iD]] = INVALID_IND;
+        createdDarts[canon.vertices] = std::make_tuple(newDartIndices[iF][0], canon.rotation, canon.orientation);
+      } else {
+        // if the opposite face has already created, hook up the appropriate pointers
+        for (size_t i = face.size(); i > 0; i--) {
+          attachDartMap2(newDartIndices[iF][i % face.size()], twinFaceDart);
+          twinFaceDart = dartMap[0][twinFaceDart];
+        }
+        // attachDartMap2(newDartIndices[3 * iF + 0], twinFaceDart);
+        // attachDartMap2(newDartIndices[3 * iF + 2], dartMap[0][twinFaceDart]);
+        // attachDartMap2(newDartIndices[3 * iF + 1], dartMap[0][dartMap[0][twinFaceDart]]);
+
+        if (DEBUG_PRINT) {
+          size_t myDart = newDartIndices[iF][0];
+          size_t oppDart = twinFaceDart;
+          std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
+                    << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
+                    << "[dart " << oppDart << "]" << std::endl;
+          myDart = newDartIndices[iF][face.size() - 1];
+          oppDart = dartMap[0][twinFaceDart];
+          std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
+                    << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
+                    << "[dart " << oppDart << "]" << std::endl;
+          myDart = newDartIndices[iF][face.size() - 2];
+          oppDart = dartMap[0][dartMap[0][twinFaceDart]];
+          std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
+                    << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
+                    << "[dart " << oppDart << "]" << std::endl;
+        }
+
+        size_t myDart = newDartIndices[iF][0];
+        size_t oppDart = twinFaceDart;
+        GC_SAFETY_ASSERT(dCellArr[0][myDart] == dCellArr[0][dartMap[0][oppDart]], "dart gluing misaligned");
+      }
+    }
+  }
+
+  nCellsCapacityCount[0] = nCellsCount[0];
+  nCellsFillCount[0] = nCellsCount[0];
+  nDartsCapacityCount = nDartsCount;
+  nDartsFillCount = nDartsCount;
+
+  // construct 1-cells and 2-cells
+  indexCells(1);
+  indexCells(2);
+}
+
 /*
 // Builds a tet mesh
 template <>
@@ -845,7 +1031,7 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::array<size_t, 4>>& 
     // take in canonicalized vertex list, return first dart index, number of shifts to canonicalize, orientation
     std::map<std::array<size_t, 3>, std::tuple<size_t, int, bool>> createdDarts;
 
-    // turn input list into compute canonicalized vertex list, number of shifts, and orientation
+    // turn input list into canonicalized vertex list, number of shifts, and orientation
     struct CanonicalVertexList {
       std::array<size_t, 3> vertices; // canonical ordering
       int rotation;                   // how many times to rotate to get from input to canonical
@@ -1154,8 +1340,19 @@ void CombinatorialMap<D>::validateConnectivity() {
     assert(!dartIsDead(iDart)); // no darts should be dead yet
     if (dartIsDead(iDart)) continue;
     // check partner, only allow INVALID_IND partner for dim>0 (i.e. not `next` map)
+    // check that darts point opposite to each other
+    size_t vTail = dCellArr[0][iDart], vTip = dCellArr[0][dartMap[0][iDart]];
     for (size_t dim = 0; dim < D; dim++) {
       validateDart(dartMap[dim][iDart], "dart.partner(" + std::to_string(dim) + ")", dim > 0);
+      if (dartMap[dim][iDart] != INVALID_IND && dim > 0) {
+        size_t vTailOp = dCellArr[0][dartMap[dim][iDart]], vTipOp = dCellArr[0][dartMap[0][dartMap[dim][iDart]]];
+        if (vTailOp != vTip || vTipOp != vTail) {
+          throw std::logic_error("dart " + std::to_string(iDart) + " : " + std::to_string(vTail) + "->" +
+                                 std::to_string(vTip) + " is glued to dart " + std::to_string(dartMap[dim][iDart]) +
+                                 " : " + std::to_string(vTailOp) + "->" + std::to_string(vTipOp) + " by dart map " +
+                                 std::to_string(dim) + " but the two are misaligned");
+        }
+      }
     }
     for (size_t k = 0; k <= D; k++) validateCell(k, dCellArr[k][iDart], "he.cell<" + std::to_string(k) + ">()");
   }
@@ -1194,6 +1391,162 @@ void CombinatorialMap<D>::validateConnectivity() {
   //     if (e != d.template cell<3>()) throw std::logic_error("3-cell dart doesn't match dart.cell<3>");
   //   }
   // }
+}
+
+template <size_t D>
+std::array<std::vector<size_t>, D - 1> constructDartMaps(const NestedVector<D - 1, size_t>& cells) {}
+
+template <>
+std::array<std::vector<size_t>, 1> constructDartMaps(const std::vector<size_t>& polygon) {
+  std::vector<size_t> next;
+  next.reserve(polygon.size());
+  for (size_t iD = 0; iD < polygon.size(); iD++) next.push_back((iD + 1) % polygon.size());
+  return {next};
+}
+
+template <>
+std::array<std::vector<size_t>, 2> constructDartMaps(const std::vector<std::vector<size_t>>& polygons) {
+  size_t nDarts = 0;
+  for (const std::vector<size_t>& face : polygons) nDarts += face.size();
+
+  std::array<std::vector<size_t>, 2> dartMap;
+  dartMap[0].reserve(nDarts);
+  dartMap[1] = std::vector<size_t>(nDarts); // allow random access to twin map
+
+  // map std::minmax(dart.tailvertex, dart.tipvertex) -> (dart id, dart orientation), helps construct twin map
+  std::map<std::pair<size_t, size_t>, std::pair<size_t, bool>> cellDarts;
+  size_t nCreatedDarts = 0;
+  for (size_t iF = 0; iF < polygons.size(); iF++) {
+    const std::vector<size_t>& face = polygons[iF];
+    for (size_t iD = 0; iD < face.size(); iD++) {
+      size_t jD = (iD + 1) % face.size();       // next dart around face
+      dartMap[0].push_back(nCreatedDarts + jD); // set next() to next dart around face
+      size_t vTail = face[iD], vTip = face[jD];
+      std::pair<size_t, size_t> key = std::minmax(vTail, vTip);
+      auto itTwin = cellDarts.find(key);
+      if (itTwin != cellDarts.end()) { // found another dart along this edge
+        GC_SAFETY_ASSERT((vTail < vTip) != itTwin->second.second, "cell orientation error: " + std::to_string(vTail) +
+                                                                      "->" + std::to_string(vTip) + " appears twice");
+        dartMap[1][nCreatedDarts + iD] = itTwin->second.first;
+        dartMap[1][itTwin->second.first] = nCreatedDarts + iD;
+      } else { // first time seeing this edge, save dart
+        cellDarts[key] = std::make_pair(nCreatedDarts + iD, (vTail < vTip));
+      }
+    }
+    nCreatedDarts += face.size();
+  }
+  return dartMap;
+}
+
+template <>
+std::array<std::vector<size_t>, 3> constructDartMaps(const std::vector<std::vector<std::vector<size_t>>>& cells) {
+  std::array<std::vector<size_t>, 3> dartMap;
+
+  // set dartMaps[0 and 1] recursively in each cell
+  size_t nCreatedDarts = 0;
+  for (const std::vector<std::vector<size_t>>& cell : cells) {
+    std::array<std::vector<size_t>, 2> cellDartMaps = constructDartMaps<2>(cell);
+    for (size_t iD = 0; iD < cellDartMaps[0].size(); iD++) {
+      for (size_t dim = 0; dim < 2; dim++) dartMap[dim][nCreatedDarts + iD] = nCreatedDarts + cellDartMaps[dim][iD];
+    }
+    nCreatedDarts += cellDartMaps[0].size();
+  }
+
+  // set last dart map by looking up twins in a map
+  dartMap[2] = std::vector<size_t>(dartMap[0].size()); // allow random access to twin map
+
+  // take in canonicalized vertex list, return first dart index, number of shifts to canonicalize, orientation
+  std::map<std::vector<size_t>, std::tuple<size_t, int, bool>> createdDarts;
+
+  // turn input list into canonicalized vertex list, number of shifts, and orientation
+  struct CanonicalVertexList {
+    std::vector<size_t> vertices; // canonical ordering
+    int rotation;                 // how many times to rotate to get from input to canonical
+    bool orientation;             // false <=> input was flipped during canonicalization
+  };
+  auto canonicalize = [](std::vector<size_t> face) -> CanonicalVertexList {
+    size_t degree = face.size();
+
+    // find the minimum vertex index
+    size_t minIdx = 0;
+    for (size_t i = 1; i < degree; ++i) {
+      if (face[i] < face[minIdx]) minIdx = i;
+    }
+
+    // there are two possible orderings starting with the minimum vertex
+    // choose the unique ordering where the second vertex is smaller than the last
+    std::vector<size_t> result;
+    result.reserve(degree);
+    if (face[(minIdx + 1) % degree] < face[(minIdx + degree - 1) % degree]) {
+      for (size_t i = 0; i < degree; i++) result.push_back(face[(minIdx + i) % degree]); // f[minIdx], f[minIdx+1],...
+      return {result, static_cast<int>(minIdx), true};
+    } else {
+      for (size_t i = 0; i < degree; i++)
+        result.push_back(face[(minIdx + degree - i) % degree]); // f[minIdx], f[minIdx-1],...
+      return {result, static_cast<int>(minIdx), false};
+    }
+  };
+
+  auto oppDartLookup = [&](const std::vector<size_t>& face, const CanonicalVertexList& canon) -> size_t {
+    size_t degree = face.size();
+    auto dartIt = createdDarts.find(canon.vertices);
+    if (dartIt == createdDarts.end()) {
+      return INVALID_IND; // never seen this face with any orientation
+    } else {
+      // make sure this face hasn't already appeared with the same orientation
+      GC_SAFETY_ASSERT(canon.orientation != std::get<2>(dartIt->second),
+                       "tet mesh orientation problem: duplicate face {" + std::to_string(face[0]) + ", " +
+                           std::to_string(face[1]) + ", " + std::to_string(face[2]) + "}");
+
+      int storedRotation = std::get<1>(dartIt->second);
+      int inputRotation = canon.rotation;
+
+      // Since the faces have opposite orientations, we need to account for the reversal
+      int rotationDiff = (degree - 1 + inputRotation + storedRotation) % degree; // TODO why is this correct?
+
+      // if (DEBUG_PRINT)
+      //   std::cout << "stored rotation: " << storedRotation << "\t|input rotation: " << inputRotation
+      //             << "\t|diff: " << rotationDiff << std::endl;
+
+      // Apply dartMap[0] the appropriate number of times
+      size_t resultDart = std::get<0>(dartIt->second);
+      for (int i = 0; i < rotationDiff; ++i) {
+        resultDart = dartMap[0][resultDart];
+      }
+
+      return resultDart;
+    }
+  };
+
+  auto attachDartMap2 = [&](size_t iDart, size_t jDart) -> void {
+    dartMap[2][iDart] = jDart;
+    dartMap[2][jDart] = iDart;
+  };
+
+  size_t nPrevDarts = 0;
+  for (size_t iC = 0; iC < cells.size(); iC++) {
+    const std::vector<std::vector<size_t>>& cell = cells[iC];
+
+    // glue together opposite faces
+    for (size_t iF = 0; iF < cell.size(); ++iF) {
+      const std::vector<size_t> face = cell[iF];
+      CanonicalVertexList canon = canonicalize(face);
+      size_t twinFaceDart = oppDartLookup(face, canon);
+      if (twinFaceDart == INVALID_IND) {
+        // if the opposite face has not been created, set the dartMap[2] pointers to INVALID_IND
+        for (size_t iD = 0; iD < face.size(); iD++) dartMap[2][nPrevDarts + iD] = INVALID_IND;
+        createdDarts[canon.vertices] = std::make_tuple(nPrevDarts, canon.rotation, canon.orientation);
+      } else {
+        // if the opposite face has already created, hook up the appropriate pointers
+        for (size_t i = face.size(); i > 0; i--) {
+          attachDartMap2(nPrevDarts + (i % face.size()), twinFaceDart);
+          twinFaceDart = dartMap[0][twinFaceDart];
+        }
+      }
+      nPrevDarts += face.size();
+    }
+  }
+  return dartMap;
 }
 
 // ==========================================================
