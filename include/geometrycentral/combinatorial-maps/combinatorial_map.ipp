@@ -517,7 +517,7 @@ void CombinatorialMap<D>::indexCells(size_t k) {
   };
 
   for (Dart<D> d : darts()) {
-    for (std::pair<Dart<3>, bool> n : orbitNeighbors(d, k)) {
+    for (std::pair<Dart<D>, bool> n : orbitNeighbors(d, k)) {
       unite(d.getIndex(), n.first.getIndex(), n.second);
       if (DEBUG_PRINT) {
         std::cout << "uniting dart " << d.getIndex() << " with dart " << n.first.getIndex()
@@ -689,6 +689,13 @@ constexpr std::array<std::array<size_t, halfFactorial(D + 1)>, D - 1> simplexDar
   return dartMaps;
 }
 
+template <> // simplexDartMaps<2>()
+constexpr std::array<std::array<size_t, 3>, 1> simplexDartMaps<2>() {
+  return {
+      std::array<size_t, 3>{1, 2, 0} // dartMap[0]
+  };
+}
+
 template <> // simplexDartMaps<3>()
 constexpr std::array<std::array<size_t, 12>, 2> simplexDartMaps<3>() {
   return {
@@ -781,8 +788,10 @@ CombinatorialMap<D>::CombinatorialMap(const std::vector<std::array<size_t, D + 1
           createdDarts[key] = newDart;
         } else { // otherwise fill in partner(D-1) for this dart, and its next and next.next
           attachTopDartMap(newDart, topTwin->second);
-          attachTopDartMap(dartMap[0][newDart], dartMap[0][dartMap[0][topTwin->second]]);
-          attachTopDartMap(dartMap[0][dartMap[0][newDart]], dartMap[0][topTwin->second]);
+          if (D > 2) { // for D > 2, we can glue the rest of the darts in the 2-face as well
+            attachTopDartMap(dartMap[0][newDart], dartMap[0][dartMap[0][topTwin->second]]);
+            attachTopDartMap(dartMap[0][dartMap[0][newDart]], dartMap[0][topTwin->second]);
+          }
         }
       }
     }
@@ -1161,7 +1170,11 @@ void CombinatorialMap<D>::validateConnectivity() {
   // TODO: loop over all dimensions?
   for (Vertex<D> v : vertices()) {
     for (Dart<D> d : v.adjacentDarts()) {
-      if (v != d.vertex()) throw std::logic_error("vertex dart doesn't match dart.vertex");
+      if (v != d.vertex()) {
+        std::cout << "vertex: " << v << ", dart: " << d << std::endl;
+        std::cout << "dart.vertex: " << d.vertex() << std::endl;
+        throw std::logic_error("vertex dart doesn't match dart.vertex");
+      }
     }
   }
   for (Edge<D> e : edges()) {
@@ -1174,11 +1187,13 @@ void CombinatorialMap<D>::validateConnectivity() {
       if (e != d.face()) throw std::logic_error("face dart doesn't match dart.face");
     }
   }
-  for (Cell<3, D> e : cells<3>()) {
-    for (Dart<D> d : e.adjacentDarts()) {
-      if (e != d.template cell<3>()) throw std::logic_error("3-cell dart doesn't match dart.cell<3>");
-    }
-  }
+
+  // // Causes compiler errors in CombinatorialMap<2>, where static_asserts don't let us construct 3-cells
+  // for (Cell<3, D> e : cells<3>()) {
+  //   for (Dart<D> d : e.adjacentDarts()) {
+  //     if (e != d.template cell<3>()) throw std::logic_error("3-cell dart doesn't match dart.cell<3>");
+  //   }
+  // }
 }
 
 // ==========================================================
