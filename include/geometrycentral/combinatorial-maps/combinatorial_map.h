@@ -305,6 +305,12 @@ struct NestedVectorImpl<0, T> {
   using type = T;
 };
 
+// nested vector for-each - non-const version
+template <std::size_t D, typename T, typename Function>
+void nestedForEach(NestedVector<D, T>& vec, Function f);
+template <std::size_t D, typename T, typename Function>
+void nestedForEach(const NestedVector<D, T>& vec, Function f);
+
 
 } // namespace combinatorial_map
 } // namespace geometrycentral

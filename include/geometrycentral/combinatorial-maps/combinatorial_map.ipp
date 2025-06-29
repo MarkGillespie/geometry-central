@@ -429,7 +429,6 @@ void CombinatorialMap<D>::copyInternalFields(CombinatorialMap<D>& target) const 
   // == Copy _all_ the fields!
 
   // Raw data buffers (underlying std::vectors duplicate storage automatically)
-  // TODO: does this still do a deep copy now that this is an std::array?
   target.dartMap = dartMap;
   target.dCellArr = dCellArr;
   target.dCellSgn = dCellSgn;
@@ -438,8 +437,9 @@ void CombinatorialMap<D>::copyInternalFields(CombinatorialMap<D>& target) const 
   // counts and flags
   target.nDartsCount = nDartsCount;
   target.nDartsCapacityCount = nDartsCapacityCount;
-  target.nCellsCapacityCount = nCellsCapacityCount;
   target.nDartsFillCount = nDartsFillCount;
+  target.nCellsCount = nCellsCount;
+  target.nCellsCapacityCount = nCellsCapacityCount;
   target.nCellsFillCount = nCellsFillCount;
 
   target.isCompressedFlag = isCompressedFlag;
@@ -556,49 +556,6 @@ void CombinatorialMap<D>::indexCells(size_t k) {
   // Shrink internal arrays
   cDartArr[k].resize(nCellsCount[k]);
   nCellsCapacityCount[k] = nCellsCount[k];
-}
-
-
-// Builds a halfedge mesh
-template <>
-CombinatorialMap<2>::CombinatorialMap(const std::vector<std::vector<size_t>>& polygons) {
-  surface::ManifoldSurfaceMesh mesh(polygons);
-
-  // TODO: fill out other nCellsCount
-  nCellsCount[0] = mesh.nVertices();
-  nDartsCount = mesh.nHalfedges();
-  nCellsCapacityCount[0] = nCellsCount[0];
-  nDartsCapacityCount = nDartsCount;
-  nCellsFillCount[0] = nCellsCount[0];
-  nDartsFillCount = nDartsCount;
-
-  // TODO: copy over arrays?
-  surface::VertexData<size_t> vIdx = mesh.getVertexIndices();
-  surface::EdgeData<size_t> eIdx = mesh.getEdgeIndices();
-  surface::FaceData<size_t> fIdx = mesh.getFaceIndices();
-  surface::HalfedgeData<size_t> hIdx = mesh.getHalfedgeIndices();
-  dartMap[0].reserve(mesh.nHalfedges());
-  dartMap[1].reserve(mesh.nHalfedges());
-  dCellArr[0].reserve(mesh.nHalfedges());
-  dCellArr[1].reserve(mesh.nHalfedges());
-  dCellArr[2].reserve(mesh.nHalfedges());
-  dCellSgn[0].reserve(mesh.nHalfedges());
-  dCellSgn[1].reserve(mesh.nHalfedges());
-  dCellSgn[2].reserve(mesh.nHalfedges());
-  cDartArr[0].reserve(mesh.nVertices());
-  for (surface::Halfedge he : mesh.halfedges()) {
-    dartMap[0].push_back(hIdx[he.next()]);
-    dartMap[1].push_back(hIdx[he.twin()]);
-    dCellArr[0].push_back(vIdx[he.vertex()]);
-    dCellArr[1].push_back(eIdx[he.edge()]);
-    dCellArr[2].push_back(fIdx[he.face()]);
-    dCellSgn[0].push_back(true);
-    dCellSgn[1].push_back(he.orientation());
-    dCellSgn[2].push_back(true);
-  }
-  for (surface::Vertex v : mesh.vertices()) {
-    cDartArr[0].push_back(hIdx[v.halfedge()]);
-  }
 }
 
 // computes n! / 2, used as a helper function for simplicial complex constructor
@@ -819,6 +776,73 @@ CombinatorialMap<D>::CombinatorialMap(const std::vector<std::array<size_t, D + 1
   for (size_t k = 1; k < D; k++) indexCells(k);
 }
 
+template <size_t D>
+CombinatorialMap<D>::CombinatorialMap(const NestedVector<D, size_t>& cells) {
+  const bool DEBUG_PRINT = true;
+  nCellsCount[0] = 0;
+  nestedForEach(cells, [&](size_t i) { nCellsCount[0] = std::max(nCellsCount[0], i); });
+  nCellsCount[0]++; // 0-based means count is max + 1
+
+  cDartArr[0] = std::vector<size_t>(nCellsCount[0], INVALID_IND);
+
+  std::array<std::vector<size_t>, D> computedDartMaps = constructDartMaps(cells);
+
+  // construct darts
+  std::vector<size_t> dartIndices;
+  dartIndices.reserve(computedDartMaps[0].size());
+  for (size_t iDart = 0; iDart < computedDartMaps[0].size(); iDart++) {
+  }
+
+  // TODO: finish this
+  throw std::runtime_error(
+      "error: general cell complex CombinatorialMap<D> constructor not implemented yet for D > 3. "
+      "Only the simplicial constructor CombinatorialMap<D>(std::vector<std::array<size_t, D+1>>) has been implemented");
+}
+
+// Builds a 2D polygon mesh
+template <>
+CombinatorialMap<2>::CombinatorialMap(const std::vector<std::vector<size_t>>& polygons) {
+  surface::ManifoldSurfaceMesh mesh(polygons);
+
+  nCellsCount[0] = mesh.nVertices(), nCellsCount[1] = mesh.nEdges(), nCellsCount[2] = mesh.nFaces();
+  nDartsCount = mesh.nHalfedges();
+  for (size_t dim = 0; dim <= 2; dim++) {
+    nCellsCapacityCount[dim] = nCellsCount[dim];
+    nCellsFillCount[dim] = nCellsCount[dim];
+  }
+  nDartsCapacityCount = nDartsCount, nDartsFillCount = nDartsCount;
+
+  surface::VertexData<size_t> vIdx = mesh.getVertexIndices();
+  surface::EdgeData<size_t> eIdx = mesh.getEdgeIndices();
+  surface::FaceData<size_t> fIdx = mesh.getFaceIndices();
+  surface::HalfedgeData<size_t> hIdx = mesh.getHalfedgeIndices();
+
+  dartMap[0].reserve(mesh.nHalfedges());
+  dartMap[1].reserve(mesh.nHalfedges());
+  for (size_t dim = 0; dim <= 2; dim++) {
+    dCellArr[dim].reserve(mesh.nHalfedges());
+    dCellSgn[dim].reserve(mesh.nHalfedges());
+  }
+  cDartArr[0].reserve(mesh.nVertices());
+  cDartArr[1].reserve(mesh.nEdges());
+  cDartArr[2].reserve(mesh.nFaces());
+  for (surface::Halfedge he : mesh.halfedges()) {
+    // set exterior halfedges to INVALID_IND since our combinatorial maps don't use the implicit twin convention
+    dartMap[0].push_back(he.next().isInterior() ? hIdx[he.next()] : INVALID_IND);
+    dartMap[1].push_back(he.twin().isInterior() ? hIdx[he.twin()] : INVALID_IND);
+    dCellArr[0].push_back(he.isInterior() ? vIdx[he.vertex()] : INVALID_IND);
+    dCellArr[1].push_back(he.isInterior() ? eIdx[he.edge()] : INVALID_IND);
+    dCellArr[2].push_back(he.isInterior() ? fIdx[he.face()] : INVALID_IND);
+    dCellSgn[0].push_back(true);
+    dCellSgn[1].push_back(he.orientation());
+    dCellSgn[2].push_back(true);
+  }
+  for (surface::Vertex v : mesh.vertices()) cDartArr[0].push_back(hIdx[v.halfedge()]);
+  for (surface::Edge e : mesh.edges()) cDartArr[1].push_back(hIdx[e.halfedge()]);
+  for (surface::Face f : mesh.faces()) cDartArr[2].push_back(hIdx[f.halfedge()]);
+}
+
+
 // Builds a 3D volume mesh
 template <>
 CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<std::vector<size_t>>>& cells) {
@@ -842,11 +866,10 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<std::vector<
     int rotation;                 // how many times to rotate to get from input to canonical
     bool orientation;             // false <=> input was flipped during canonicalization
   };
-  auto canonicalize = [](std::vector<size_t> face) -> CanonicalVertexList {
+  auto canonicalize = [](const std::vector<size_t>& face) -> CanonicalVertexList {
     size_t degree = face.size();
 
-    // find the minimum vertex index
-    size_t minIdx = 0;
+    size_t minIdx = 0; // find minimum vertex index
     for (size_t i = 1; i < degree; ++i) {
       if (face[i] < face[minIdx]) minIdx = i;
     }
@@ -875,22 +898,10 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<std::vector<
       GC_SAFETY_ASSERT(canon.orientation != std::get<2>(dartIt->second),
                        "tet mesh orientation problem: duplicate face {" + std::to_string(face[0]) + ", " +
                            std::to_string(face[1]) + ", " + std::to_string(face[2]) + "}");
-
-      int storedRotation = std::get<1>(dartIt->second);
-      int inputRotation = canon.rotation;
-
-      // Since the faces have opposite orientations, we need to account for the reversal
-      int rotationDiff = (degree - 1 + inputRotation + storedRotation) % degree; // TODO why is this correct?
-
-      // if (DEBUG_PRINT)
-      //   std::cout << "stored rotation: " << storedRotation << "\t|input rotation: " << inputRotation
-      //             << "\t|diff: " << rotationDiff << std::endl;
-
-      // Apply dartMap[0] the appropriate number of times
-      size_t resultDart = std::get<0>(dartIt->second);
-      for (int i = 0; i < rotationDiff; ++i) {
-        resultDart = dartMap[0][resultDart];
-      }
+      int storedRotation = std::get<1>(dartIt->second), inputRotation = canon.rotation;
+      int rotationDiff = (inputRotation + storedRotation + degree - 1) % degree;
+      size_t resultDart = std::get<0>(dartIt->second); // repeatedly apply dartMap[0] to reference dart stored in map
+      for (int i = 0; i < rotationDiff; ++i) resultDart = dartMap[0][resultDart];
 
       return resultDart;
     }
@@ -961,40 +972,15 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<std::vector<
       const std::vector<size_t> face = cell[iF];
       CanonicalVertexList canon = canonicalize(face);
       size_t twinFaceDart = oppDartLookup(face, canon);
-      if (twinFaceDart == INVALID_IND) {
-        // if the opposite face has not been created, set the dartMap[2] pointers to INVALID_IND
+      if (twinFaceDart == INVALID_IND) { // if the opposite face does not exist yet, set dartMap[2] to INVALID_IND
         for (size_t iD = 0; iD < face.size(); iD++) dartMap[2][newDartIndices[iF][iD]] = INVALID_IND;
         createdDarts[canon.vertices] = std::make_tuple(newDartIndices[iF][0], canon.rotation, canon.orientation);
-      } else {
-        // if the opposite face has already created, hook up the appropriate pointers
+      } else { // if the opposite face has already created, hook up the appropriate pointers
         for (size_t i = face.size(); i > 0; i--) {
           attachDartMap2(newDartIndices[iF][i % face.size()], twinFaceDart);
           twinFaceDart = dartMap[0][twinFaceDart];
         }
-        // attachDartMap2(newDartIndices[3 * iF + 0], twinFaceDart);
-        // attachDartMap2(newDartIndices[3 * iF + 2], dartMap[0][twinFaceDart]);
-        // attachDartMap2(newDartIndices[3 * iF + 1], dartMap[0][dartMap[0][twinFaceDart]]);
-
-        if (DEBUG_PRINT) {
-          size_t myDart = newDartIndices[iF][0];
-          size_t oppDart = twinFaceDart;
-          std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
-                    << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
-                    << "[dart " << oppDart << "]" << std::endl;
-          myDart = newDartIndices[iF][face.size() - 1];
-          oppDart = dartMap[0][twinFaceDart];
-          std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
-                    << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
-                    << "[dart " << oppDart << "]" << std::endl;
-          myDart = newDartIndices[iF][face.size() - 2];
-          oppDart = dartMap[0][dartMap[0][twinFaceDart]];
-          std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
-                    << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
-                    << "[dart " << oppDart << "]" << std::endl;
-        }
-
-        size_t myDart = newDartIndices[iF][0];
-        size_t oppDart = twinFaceDart;
+        size_t myDart = newDartIndices[iF][0], oppDart = twinFaceDart;
         GC_SAFETY_ASSERT(dCellArr[0][myDart] == dCellArr[0][dartMap[0][oppDart]], "dart gluing misaligned");
       }
     }
@@ -1010,295 +996,6 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<std::vector<
   indexCells(2);
 }
 
-/*
-// Builds a tet mesh
-template <>
-CombinatorialMap<3>::CombinatorialMap(const std::vector<std::array<size_t, 4>>& tets) {
-  const bool DEBUG_PRINT = false;
-  nCellsCount[0] = 0;
-  for (const std::array<size_t, 4>& tet : tets) {
-    for (size_t i : tet) {
-      nCellsCount[0] = std::max(nCellsCount[0], i);
-    }
-  }
-  nCellsCount[0]++; // 0-based means count is max + 1
-
-  cDartArr[0] = std::vector<size_t>(nCellsCount[0], INVALID_IND);
-
-  bool fancyMap = true;
-  if (fancyMap) {
-
-    // take in canonicalized vertex list, return first dart index, number of shifts to canonicalize, orientation
-    std::map<std::array<size_t, 3>, std::tuple<size_t, int, bool>> createdDarts;
-
-    // turn input list into canonicalized vertex list, number of shifts, and orientation
-    struct CanonicalVertexList {
-      std::array<size_t, 3> vertices; // canonical ordering
-      int rotation;                   // how many times to rotate to get from input to canonical
-      bool orientation;               // false <=> input was flipped during canonicalization
-    };
-    auto canonicalize = [](std::array<size_t, 3> face) -> CanonicalVertexList {
-      // find the minimum vertex index
-      size_t minIdx = 0;
-      for (size_t i = 1; i < 3; ++i) {
-        if (face[i] < face[minIdx]) minIdx = i;
-      }
-
-      // the two possible orderings starting with the minimum vertex
-      std::array<size_t, 3> order1 = {face[minIdx], face[(minIdx + 1) % 3], face[(minIdx + 2) % 3]};
-      std::array<size_t, 3> order2 = {face[minIdx], face[(minIdx + 2) % 3], face[(minIdx + 1) % 3]};
-
-      // choose the unique ordering where the second vertex is smaller than the third
-      if (order1[1] < order1[2]) {
-        return {order1, static_cast<int>(minIdx), true};
-      } else {
-        // return {order2, static_cast<int>((3 - minIdx) % 3), false};
-        return {order2, static_cast<int>(minIdx), false};
-      }
-    };
-
-    auto oppDartLookup = [&](const std::array<size_t, 3>& face, const CanonicalVertexList& canon) -> size_t {
-      auto dartIt = createdDarts.find(canon.vertices);
-      if (dartIt == createdDarts.end()) {
-        return INVALID_IND; // never seen this face with any orientation
-      } else {
-        // make sure this face hasn't already appeared with the same orientation
-        GC_SAFETY_ASSERT(canon.orientation != std::get<2>(dartIt->second),
-                         "tet mesh orientation problem: duplicate face {" + std::to_string(face[0]) + ", " +
-                             std::to_string(face[1]) + ", " + std::to_string(face[2]) + "}");
-
-        int storedRotation = std::get<1>(dartIt->second);
-        int inputRotation = canon.rotation;
-
-        // Since the faces have opposite orientations, we need to account for the reversal
-        int rotationDiff = (5 + inputRotation + storedRotation) % 3; // TODO why is this correct?
-
-        // if (DEBUG_PRINT)
-        //   std::cout << "stored rotation: " << storedRotation << "\t|input rotation: " << inputRotation
-        //             << "\t|diff: " << rotationDiff << std::endl;
-
-        // Apply dartMap[0] the appropriate number of times
-        size_t resultDart = std::get<0>(dartIt->second);
-        for (int i = 0; i < rotationDiff; ++i) {
-          resultDart = dartMap[0][resultDart];
-        }
-
-        return resultDart;
-      }
-    };
-
-    // === Walk the tets, creating darts. Hook up dartMap[0] and dartMap[1] pointers (halfedges on tet surfaces), but
-    // don't hook up dartMap[2] yet (gluing tets together).
-
-    // The oriented faces of tet {0, 1, 2, 3} are given by {{0, 1, 2}, {0, 2, 3}, {1, 3, 2}, {0, 3, 1}}
-    // We index the tet's halfedges as 0 1 2, 3 4 5, 6 7 8, 9 10 11
-    // The next array is 1 2 0, 4 5 3, 7 8 6, 10 11 9
-    // The twin array is 11 8 3, 2 7 9, 10 4 1, 5 6 0
-    const std::array<std::array<size_t, 3>, 4> tetFaceIndices{
-        std::array<size_t, 3>{0, 1, 2}, std::array<size_t, 3>{0, 2, 3}, std::array<size_t, 3>{1, 3, 2},
-        std::array<size_t, 3>{0, 3, 1}};
-    const std::array<size_t, 12> next{1, 2, 0, 4, 5, 3, 7, 8, 6, 10, 11, 9};
-    const std::array<size_t, 12> twin{11, 8, 3, 2, 7, 9, 10, 4, 1, 5, 6, 0};
-
-    auto attachDartMap2 = [&](size_t iDart, size_t jDart) -> void {
-      dartMap[2][iDart] = jDart;
-      dartMap[2][jDart] = iDart;
-    };
-
-    for (const std::array<size_t, 4>& tet : tets) {
-      size_t iCell3 = getNewCell<3>().getIndex();
-
-      const std::array<std::array<size_t, 3>, 4> tetFaces{
-          std::array<size_t, 3>{tet[0], tet[1], tet[2]}, std::array<size_t, 3>{tet[0], tet[2], tet[3]},
-          std::array<size_t, 3>{tet[1], tet[3], tet[2]}, std::array<size_t, 3>{tet[0], tet[3], tet[1]}};
-
-      std::array<size_t, 12> newDartIndices;
-      for (size_t iDart = 0; iDart < 12; ++iDart) {
-        size_t newDart = getNewDart().getIndex();
-        newDartIndices[iDart] = newDart;
-
-        size_t iV = tetFaces[iDart / 3][iDart % 3];
-        dCellArr[0][newDart] = iV;
-        dCellSgn[0][newDart] = true;
-        cDartArr[0][iV] = newDart;
-      }
-
-      for (size_t iDart = 0; iDart < 12; ++iDart) {
-        dartMap[0][newDartIndices[iDart]] = newDartIndices[next[iDart]];
-        dartMap[1][newDartIndices[iDart]] = newDartIndices[twin[iDart]];
-        dCellArr[3][newDartIndices[iDart]] = iCell3;
-        dCellSgn[3][newDartIndices[iDart]] = true;
-      }
-      cDartArr[3][iCell3] = newDartIndices[0];
-
-      // if (DEBUG_PRINT) {
-      //   for (size_t iDart = 0; iDart < 12; ++iDart) {
-      //     std::cout << "Dart " << newDartIndices[iDart] << " : " << dCellArr[0][newDartIndices[iDart]] << "->"
-      //               << dCellArr[0][dartMap[0][newDartIndices[iDart]]] << std::endl;
-      //   }
-      // }
-
-      // glue together opposite faces
-      for (size_t iF = 0; iF < 4; ++iF) {
-        const std::array<size_t, 3> face = tetFaces[iF];
-        CanonicalVertexList canon = canonicalize(face);
-        size_t twinFaceDart = oppDartLookup(face, canon);
-        if (twinFaceDart == INVALID_IND) {
-          // if the opposite face has not been created, set the dartMap[2] pointers to INVALID_IND
-          for (size_t iD = 0; iD < 3; iD++) dartMap[2][newDartIndices[3 * iF + iD]] = INVALID_IND;
-          // createdDarts[face] = newDartIndices[3 * iF];
-          createdDarts[canon.vertices] = std::make_tuple(newDartIndices[3 * iF], canon.rotation, canon.orientation);
-        } else {
-          // if the opposite face has already created, hook up the appropriate pointers
-          attachDartMap2(newDartIndices[3 * iF + 0], twinFaceDart);
-          attachDartMap2(newDartIndices[3 * iF + 2], dartMap[0][twinFaceDart]);
-          attachDartMap2(newDartIndices[3 * iF + 1], dartMap[0][dartMap[0][twinFaceDart]]);
-
-          if (DEBUG_PRINT) {
-            size_t myDart = newDartIndices[3 * iF + 0];
-            size_t oppDart = twinFaceDart;
-            std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
-                      << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
-                      << "[dart " << oppDart << "]" << std::endl;
-            myDart = newDartIndices[3 * iF + 2];
-            oppDart = dartMap[0][twinFaceDart];
-            std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
-                      << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
-                      << "[dart " << oppDart << "]" << std::endl;
-            myDart = newDartIndices[3 * iF + 1];
-            oppDart = dartMap[0][dartMap[0][twinFaceDart]];
-            std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
-                      << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
-                      << "[dart " << oppDart << "]" << std::endl;
-          }
-
-          size_t myDart = newDartIndices[3 * iF + 0];
-          size_t oppDart = twinFaceDart;
-          GC_SAFETY_ASSERT(dCellArr[0][myDart] == dCellArr[0][dartMap[0][oppDart]], "dart gluing misaligned");
-        }
-      }
-    }
-  } else {
-    std::map<std::array<size_t, 3>, size_t> createdDarts;
-
-    auto shift = [&](std::array<size_t, 3> key) -> std::array<size_t, 3> { return {key[1], key[2], key[0]}; };
-    auto flip = [&](std::array<size_t, 3> key) -> std::array<size_t, 3> { return {key[1], key[0], key[2]}; };
-
-    auto createdDartLookup = [&](std::array<size_t, 3> key) -> size_t {
-      auto keyIter = createdDarts.find(key);
-      if (keyIter != createdDarts.end()) {
-        return keyIter->second;
-      }
-      keyIter = createdDarts.find(shift(key));
-      if (keyIter != createdDarts.end()) {
-        return dartMap[0][dartMap[0][keyIter->second]];
-      }
-      keyIter = createdDarts.find(shift(shift(key)));
-      if (keyIter != createdDarts.end()) {
-        return dartMap[0][keyIter->second];
-      }
-      return INVALID_IND;
-    };
-
-    // === Walk the tets, creating darts. Hook up dartMap[0] and dartMap[1] pointers (halfedges on tet surfaces), but
-    // don't hook up dartMap[2] yet (gluing tets together).
-
-    // The oriented faces of tet {0, 1, 2, 3} are given by {{0, 1, 2}, {0, 2, 3}, {1, 3, 2}, {0, 3, 1}}
-    // We index the tet's halfedges as 0 1 2, 3 4 5, 6 7 8, 9 10 11
-    // The next array is 1 2 0, 4 5 3, 7 8 6, 10 11 9
-    // The twin array is 11 8 3, 2 7 9, 10 4 1, 5 6 0
-    const std::array<std::array<size_t, 3>, 4> tetFaceIndices{
-        std::array<size_t, 3>{0, 1, 2}, std::array<size_t, 3>{0, 2, 3}, std::array<size_t, 3>{1, 3, 2},
-        std::array<size_t, 3>{0, 3, 1}};
-    const std::array<size_t, 12> next{1, 2, 0, 4, 5, 3, 7, 8, 6, 10, 11, 9};
-    const std::array<size_t, 12> twin{11, 8, 3, 2, 7, 9, 10, 4, 1, 5, 6, 0};
-
-    auto attachDartMap2 = [&](size_t iDart, size_t jDart) -> void {
-      dartMap[2][iDart] = jDart;
-      dartMap[2][jDart] = iDart;
-    };
-
-    for (size_t iTet = 0; iTet < tets.size(); iTet++) {
-      const std::array<size_t, 4>& tet = tets[iTet];
-      size_t iCell3 = getNewCell<3>().getIndex();
-
-      const std::array<std::array<size_t, 3>, 4> tetFaces{
-          std::array<size_t, 3>{tet[0], tet[1], tet[2]}, std::array<size_t, 3>{tet[0], tet[2], tet[3]},
-          std::array<size_t, 3>{tet[1], tet[3], tet[2]}, std::array<size_t, 3>{tet[0], tet[3], tet[1]}};
-
-      std::array<size_t, 12> newDartIndices;
-      for (size_t iDart = 0; iDart < 12; ++iDart) {
-        size_t newDart = getNewDart().getIndex();
-        newDartIndices[iDart] = newDart;
-
-        size_t iV = tetFaces[iDart / 3][iDart % 3];
-        dCellArr[0][newDart] = iV;
-        dCellSgn[0][newDart] = true;
-        cDartArr[0][iV] = newDart;
-      }
-
-      for (size_t iDart = 0; iDart < 12; ++iDart) {
-        dartMap[0][newDartIndices[iDart]] = newDartIndices[next[iDart]];
-        dartMap[1][newDartIndices[iDart]] = newDartIndices[twin[iDart]];
-        dCellArr[3][newDartIndices[iDart]] = iCell3;
-        dCellSgn[3][newDartIndices[iDart]] = true;
-      }
-      cDartArr[3][iCell3] = newDartIndices[0];
-
-      if (DEBUG_PRINT) {
-        for (size_t iDart = 0; iDart < 12; ++iDart) {
-          std::cout << "Dart " << newDartIndices[iDart] << " : " << dCellArr[0][newDartIndices[iDart]] << "->"
-                    << dCellArr[0][dartMap[0][newDartIndices[iDart]]] << std::endl;
-        }
-      }
-
-      // glue together opposite faces
-      for (size_t iF = 0; iF < 4; ++iF) {
-        const std::array<size_t, 3> face = tetFaces[iF];
-        size_t twinFaceDart = createdDartLookup(flip(face));
-        if (twinFaceDart == INVALID_IND) {
-          // if the opposite face has not been created, set the dartMap[2] pointers to INVALID_IND
-          for (size_t iD = 0; iD < 3; iD++) dartMap[2][newDartIndices[3 * iF + iD]] = INVALID_IND;
-          createdDarts[face] = newDartIndices[3 * iF];
-        } else {
-          // if the opposite face has already created, hook up the appropriate pointers
-          attachDartMap2(newDartIndices[3 * iF + 0], twinFaceDart);
-          attachDartMap2(newDartIndices[3 * iF + 2], dartMap[0][twinFaceDart]);
-          attachDartMap2(newDartIndices[3 * iF + 1], dartMap[0][dartMap[0][twinFaceDart]]);
-
-          if (DEBUG_PRINT) {
-            size_t myDart = newDartIndices[3 * iF + 0];
-            size_t oppDart = twinFaceDart;
-            std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
-                      << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
-                      << "[dart " << oppDart << "]" << std::endl;
-            myDart = newDartIndices[3 * iF + 2];
-            oppDart = dartMap[0][twinFaceDart];
-            std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
-                      << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
-                      << "[dart " << oppDart << "]" << std::endl;
-            myDart = newDartIndices[3 * iF + 1];
-            oppDart = dartMap[0][dartMap[0][twinFaceDart]];
-            std::cout << " ----- gluing " << dCellArr[0][myDart] << "->" << dCellArr[0][dartMap[0][myDart]] << "[dart "
-                      << myDart << "] to " << dCellArr[0][oppDart] << "-> " << dCellArr[0][dartMap[0][oppDart]]
-                      << "[dart " << oppDart << "]" << std::endl;
-          }
-        }
-      }
-    }
-  }
-
-
-  nCellsCapacityCount[0] = nCellsCount[0];
-  nCellsFillCount[0] = nCellsCount[0];
-  nDartsCapacityCount = nDartsCount;
-  nDartsFillCount = nDartsCount;
-
-  // construct 1-cells and 2-cells
-  indexCells<1>();
-  indexCells<2>();
-}
-  */
 
 template <size_t D>
 void CombinatorialMap<D>::validateConnectivity() {
@@ -1364,7 +1061,6 @@ void CombinatorialMap<D>::validateConnectivity() {
   }
 
   // check adjacency sanity
-  // TODO: loop over all dimensions?
   for (Vertex<D> v : vertices()) {
     for (Dart<D> d : v.adjacentDarts()) {
       if (v != d.vertex()) {
@@ -1386,6 +1082,7 @@ void CombinatorialMap<D>::validateConnectivity() {
   }
 
   // // Causes compiler errors in CombinatorialMap<2>, where static_asserts don't let us construct 3-cells
+  // // TODO: figure out how to reenable?
   // for (Cell<3, D> e : cells<3>()) {
   //   for (Dart<D> d : e.adjacentDarts()) {
   //     if (e != d.template cell<3>()) throw std::logic_error("3-cell dart doesn't match dart.cell<3>");
@@ -1438,7 +1135,7 @@ std::array<std::vector<size_t>, 2> constructDartMaps(const std::vector<std::vect
   return dartMap;
 }
 
-template <>
+template <> // TODO: dedupe with 3-cell-complex constructor
 std::array<std::vector<size_t>, 3> constructDartMaps(const std::vector<std::vector<std::vector<size_t>>>& cells) {
   std::array<std::vector<size_t>, 3> dartMap;
 
@@ -1673,6 +1370,48 @@ private:
   Dart<D> dStart;
   OrbitNeighborhoodIterator<D> cachedEnd;
 };
+
+//==== Helper struct for recursive traversal of nested vectors
+template <std::size_t D>
+struct NestedForEachHelper {
+  template <typename T, typename Function>
+  static void apply(NestedVector<D, T>& vec, Function f) {
+    for (auto& elem : vec) {
+      NestedForEachHelper<D - 1>::apply(elem, f);
+    }
+  }
+
+  template <typename T, typename Function>
+  static void apply(const NestedVector<D, T>& vec, Function f) {
+    for (const auto& elem : vec) {
+      NestedForEachHelper<D - 1>::apply(elem, f);
+    }
+  }
+};
+
+// Base case specialization for D = 0
+template <>
+struct NestedForEachHelper<0> {
+  template <typename T, typename Function>
+  static void apply(T& elem, Function f) {
+    f(elem);
+  }
+
+  template <typename T, typename Function>
+  static void apply(const T& elem, Function f) {
+    f(elem);
+  }
+};
+
+// nested for-each loops
+template <std::size_t D, typename T, typename Function>
+void nestedForEach(NestedVector<D, T>& vec, Function f) {
+  NestedForEachHelper<D>::apply(vec, f);
+}
+template <std::size_t D, typename T, typename Function>
+void nestedForEach(const NestedVector<D, T>& vec, Function f) {
+  NestedForEachHelper<D>::apply(vec, f);
+}
 
 } // namespace combinatorial_map
 } // namespace geometrycentral
