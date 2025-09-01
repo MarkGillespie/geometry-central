@@ -406,6 +406,10 @@ inline bool CombinatorialMap<D>::isCompressed() const {
   return isCompressedFlag;
 }
 
+// TODO: implement me
+// template <size_t D>
+// void CombinatorialMap<D>::compress() {}
+
 template <size_t D>
 CombinatorialMap<D>::~CombinatorialMap() {
   for (auto& f : meshDeleteCallbackList) {
@@ -553,6 +557,10 @@ void CombinatorialMap<D>::indexCells(size_t k) {
     dCellArr[k][iDart] = dCellArr[k][iRoot];
     dCellSgn[k][iDart] = sharesParentSign[iDart];
   }
+
+  // Shrink internal arrays
+  cDartArr[k].resize(nCellsCount[k]);
+  nCellsCapacityCount[k] = nCellsCount[k];
 }
 
 
@@ -798,6 +806,10 @@ CombinatorialMap<D>::CombinatorialMap(const std::vector<std::array<size_t, D + 1
   nCellsFillCount[0] = nCellsCount[0];
   nDartsCapacityCount = nDartsCount;
   nDartsFillCount = nDartsCount;
+
+  // Shrink internal arrays for 3-cells (which may be over-sized since they're allocated by doubling)
+  cDartArr[D].resize(nCellsCount[D]);
+  nCellsCapacityCount[D] = nCellsCount[D];
 
   // construct 1-cells and 2-cells
   for (size_t k = 1; k < D; k++) indexCells(k);
