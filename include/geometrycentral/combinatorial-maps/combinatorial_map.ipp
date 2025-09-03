@@ -216,32 +216,70 @@ Dart<D> CombinatorialMap<D>::getNewDart() {
   return Dart<D>(this, nDartsFillCount - 1);
 }
 
+template <size_t D> // ensure we have space for n more darts
+void CombinatorialMap<D>::allocateDarts(size_t n) {
+  // The boring case, when no resize is needed
+  while (nDartsFillCount + n >= nDartsCapacityCount) {
+    size_t newDartCapacity = std::max(nDartsCapacityCount * 2, (size_t)1);
+
+    // Resize internal arrays
+    for (size_t iD = 0; iD < D; ++iD) {
+      dartMap[iD].resize(newDartCapacity);
+    }
+    for (size_t iD = 0; iD <= D; ++iD) {
+      dCellArr[iD].resize(newDartCapacity);
+      dCellSgn[iD].resize(newDartCapacity);
+    }
+
+    nDartsCapacityCount = newDartCapacity;
+
+    // Invoke relevant callback functions
+    for (auto& f : dartExpandCallbackList) {
+      f(newDartCapacity);
+    }
+  }
+
+  nDartsFillCount += n;
+  nDartsCount += n;
+
+  modificationTick++;
+}
+
 template <size_t D>
 template <size_t k>
 Cell<k, D> CombinatorialMap<D>::getNewCell() {
   static_assert(k <= D, "cell dimension k must be less than or equal to complex dimension D");
-  return Cell<k, D>(this, getNewCellIndex(k));
-}
-
-template <size_t D>
-size_t CombinatorialMap<D>::getNewCellIndex(size_t k) {
-  // The boring case, when no resize is needed
-  if (nCellsFillCount[k] < nCellsCapacityCount[k]) {
-    // No work needed
-  }
-  // The intesting case, where vectors resize
-  else {
+  if (nCellsFillCount[k] < nCellsCapacityCount[k]) { // The boring case, when no resize is needed
+  } else {                                           // The intesting case, where vectors resize
     size_t newCellCapacity = std::max(nCellsCapacityCount[k] * 2, (size_t)1);
 
     // Resize internal arrays
     cDartArr[k].resize(newCellCapacity);
-
     nCellsCapacityCount[k] = newCellCapacity;
 
     // Invoke relevant callback functions
-    for (auto& f : cellExpandCallbackList[k]) {
-      f(newCellCapacity);
-    }
+    for (auto& f : cellExpandCallbackList[k]) f(newCellCapacity);
+  }
+
+  nCellsFillCount[k]++;
+  nCellsCount[k]++;
+
+  modificationTick++;
+  return Cell<D, k>(this, nCellsFillCount[k] - 1);
+}
+
+template <size_t D>
+size_t CombinatorialMap<D>::getNewCellIndex(size_t k) {
+  if (nCellsFillCount[k] < nCellsCapacityCount[k]) { // The boring case, when no resize is needed
+  } else {                                           // The intesting case, where vectors resize
+    size_t newCellCapacity = std::max(nCellsCapacityCount[k] * 2, (size_t)1);
+
+    // Resize internal arrays
+    cDartArr[k].resize(newCellCapacity);
+    nCellsCapacityCount[k] = newCellCapacity;
+
+    // Invoke relevant callback functions
+    for (auto& f : cellExpandCallbackList[k]) f(newCellCapacity);
   }
 
   nCellsFillCount[k]++;
@@ -249,6 +287,46 @@ size_t CombinatorialMap<D>::getNewCellIndex(size_t k) {
 
   modificationTick++;
   return nCellsFillCount[k] - 1;
+}
+
+
+template <size_t D> // ensure we have space for n more k-cells
+void CombinatorialMap<D>::allocateCells(size_t k, size_t n) {
+  while (nCellsFillCount[k] + n > nCellsCapacityCount[k]) { // Resize vectors if necessary
+    size_t newCellCapacity = std::max(nCellsCapacityCount[k] * 2, (size_t)1);
+
+    // Resize internal arrays
+    cDartArr[k].resize(newCellCapacity);
+    nCellsCapacityCount[k] = newCellCapacity;
+
+    // Invoke relevant callback functions
+    for (auto& f : cellExpandCallbackList[k]) f(newCellCapacity);
+  }
+
+  nCellsFillCount[k] += n;
+  nCellsCount[k] += n;
+
+  modificationTick++;
+}
+
+template <size_t D>
+template <size_t k> // ensure we have space for n more k-cells
+void CombinatorialMap<D>::allocateCells(size_t n) {
+  while (nCellsFillCount[k] + n > nCellsCapacityCount[k]) { // Resize vectors if necessary
+    size_t newCellCapacity = std::max(nCellsCapacityCount[k] * 2, (size_t)1);
+
+    // Resize internal arrays
+    cDartArr[k].resize(newCellCapacity);
+    nCellsCapacityCount[k] = newCellCapacity;
+
+    // Invoke relevant callback functions
+    for (auto& f : cellExpandCallbackList[k]) f(newCellCapacity);
+  }
+
+  nCellsFillCount[k] += n;
+  nCellsCount[k] += n;
+
+  modificationTick++;
 }
 
 template <size_t D>
@@ -776,28 +854,11 @@ CombinatorialMap<D>::CombinatorialMap(const std::vector<std::array<size_t, D + 1
   for (size_t k = 1; k < D; k++) indexCells(k);
 }
 
+// TODO: finish this, maybe by constructing boundary matrices
 template <size_t D>
-CombinatorialMap<D>::CombinatorialMap(const NestedVector<D, size_t>& cells) {
-  const bool DEBUG_PRINT = true;
-  nCellsCount[0] = 0;
-  nestedForEach(cells, [&](size_t i) { nCellsCount[0] = std::max(nCellsCount[0], i); });
-  nCellsCount[0]++; // 0-based means count is max + 1
+CombinatorialMap<D>::CombinatorialMap(const NestedVector<D, size_t>& cells) {}
 
-  cDartArr[0] = std::vector<size_t>(nCellsCount[0], INVALID_IND);
-
-  std::array<std::vector<size_t>, D> computedDartMaps = constructDartMaps(cells);
-
-  // construct darts
-  std::vector<size_t> dartIndices;
-  dartIndices.reserve(computedDartMaps[0].size());
-  for (size_t iDart = 0; iDart < computedDartMaps[0].size(); iDart++) {
-  }
-
-  // TODO: finish this
-  throw std::runtime_error(
-      "error: general cell complex CombinatorialMap<D> constructor not implemented yet for D > 3. "
-      "Only the simplicial constructor CombinatorialMap<D>(std::vector<std::array<size_t, D+1>>) has been implemented");
-}
+#ifdef SPECIALIZATIONS
 
 // Builds a 2D polygon mesh
 template <>
@@ -995,6 +1056,135 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<std::vector<
   indexCells(1);
   indexCells(2);
 }
+#endif
+
+// template <size_t D> // Construct a cell complex given as an array of boundary matrices
+// CombinatorialMap<D>::CombinatorialMap(const std::array<SparseMatrix<int>, D>& boundaryMatrices) {
+//   const bool DEBUG_PRINT = true;
+
+//   // reserve space for k-cells for each dimension 0 <= k <= D
+//   for (size_t dim = 0; dim < D; dim++) {
+//     const SparseMatrix<int>& B = boundaryMatrices[dim]; // boundary_{dim+1} matrix
+//     allocateCells(dim, B.cols());
+//     if (dim + 1 == D) { // for top matrix, read off top-dimensional cell count too
+//       allocaateCells(D, B.rows());
+//     } else { // make sure that matrix products B_dim . B_{dim+1} make sense when B_{dim+1} exists
+//       GC_SAFETY_ASSERT(B.rows() == boundaryMatrices[dim + 1].cols(), "boundary matrix dimensions do not match");
+//     }
+//   }
+// }
+
+// Builds a 2D polygon mesh
+template <>
+CombinatorialMap<2>::CombinatorialMap(const std::vector<std::vector<size_t>>& polygons) {
+  std::map<std::pair<size_t, size_t>, size_t> edgeIndices;
+  size_t nEdges = 0;
+
+  std::array<std::vector<std::vector<std::pair<size_t, bool>>>, 2> boundaryMaps;
+
+  for (const std::vector<size_t>& face : polygons) {
+    boundaryMaps[1].push_back(std::vector<std::pair<size_t, bool>>{});
+    for (size_t iE = 0; iE < face.size(); iE++) {
+      size_t vi = face[iE], vj = face[(iE + 1) % face.size()];
+      std::pair<size_t, size_t> key = std::minmax(vi, vj);
+      bool orientation = vi < vj;
+      if (edgeIndices.find(key) == edgeIndices.end()) { // first time seeing this edge, add to boundary map
+        edgeIndices[key] = nEdges;
+        boundaryMaps[0].push_back(
+            std::vector<std::pair<size_t, bool>>{std::make_pair(vj, orientation), std::make_pair(vi, !orientation)});
+        nEdges++;
+      }
+      boundaryMaps[1].back().push_back(std::make_pair(edgeIndices[key], orientation));
+    }
+  }
+
+  constructFromBoundaryMaps(boundaryMaps);
+}
+
+template <size_t D> // Construct a cell complex given as an array of boundary matrices
+// CombinatorialMap<D>::CombinatorialMap(const std::array<SparseMatrix<int>, D>& boundaryMatrices) {
+CombinatorialMap<D>::CombinatorialMap(
+    const std::array<std::vector<std::vector<std::pair<size_t, bool>>>, D>& boundaryMaps) {
+  constructFromBoundaryMaps(boundaryMaps);
+}
+
+template <size_t D> // Construct a cell complex given as an array of boundary matrices
+                    // CombinatorialMap<D>::CombinatorialMap(const std::array<SparseMatrix<int>, D>& boundaryMatrices) {
+void CombinatorialMap<D>::constructFromBoundaryMaps(
+    const std::array<std::vector<std::vector<std::pair<size_t, bool>>>, D>& boundaryMaps) {
+  const bool DEBUG_PRINT = false;
+
+  if (DEBUG_PRINT) {
+    std::cout << "Constructing combinatorial map from boundary maps" << std::endl;
+    for (size_t k = 0; k < boundaryMaps.size(); k++) {
+      std::cout << "Boundary map " << k << " ===========" << std::endl;
+      for (size_t iC = 0; iC < boundaryMaps[k].size(); iC++) {
+        std::cout << "  Cell " << iC << ":" << std::endl << "      ";
+        for (size_t iB = 0; iB < boundaryMaps[k][iC].size(); iB++) {
+          std::cout << " " << (boundaryMaps[k][iC][iB].second ? "+" : "-") << boundaryMaps[k][iC][iB].first;
+        }
+        std::cout << std::endl;
+      }
+    }
+  }
+
+  // Sanity check that each edge has length 2, with one positive vertex and one negative vertex
+  for (size_t iE = 0; iE < boundaryMaps[0].size(); iE++) {
+    GC_SAFETY_ASSERT(boundaryMaps[0][iE].size() == 2, "edge " + std::to_string(iE) + " has " +
+                                                          std::to_string(boundaryMaps[0][iE].size()) +
+                                                          " vertices instead of the expected 2");
+    GC_SAFETY_ASSERT(boundaryMaps[0][iE][0].second != boundaryMaps[0][iE][1].second,
+                     "edge " + std::to_string(iE) + " has two vertices with the same sign");
+  }
+
+  // count 0-cells
+  size_t nVertices = 0;
+  for (const std::vector<std::pair<size_t, bool>>& edge : boundaryMaps[0]) {
+    for (const std::pair<size_t, bool>& vertex : edge) {
+      nVertices = std::max(nVertices, vertex.first);
+    }
+  }
+  nVertices++; // 0-based means count is max + 1
+  allocateCells(0, nVertices);
+
+  // reserve space for k-cells for each dimension 1 <= k <= D
+  for (size_t dim = 0; dim < D; dim++) allocateCells(dim + 1, boundaryMaps[dim].size());
+
+  // allocateDarts(nCellDarts);
+
+  // Represent darts as oriented flags. The dart {(i, oi), (j, oj), (k, ok), ...} corresponds to the flag consisting of
+  // edge i with orientation oi, face j with orientation oj, 3-cell k with orientation ok, etc.
+  // Since we store the orientation explicitly, we do not store the 0-dimensional vertex of the flag, which is uniquely
+  // determined by the edge + orientation
+  // cellDarts[k][i] lists the darts making up k-cell i.
+  std::array<std::vector<std::vector<std::pair<size_t, bool>>>, D + 1> cellDarts;
+
+  // fill in edge darts directly
+  for (size_t iE = 0; iE < boundaryMaps[0].size(); iE++) {
+    return cellDarts[1].push_back({std::vector<std::pair<size_t, bool>>{std::make_pair(iE, true)}});
+  }
+
+  throw std::runtime_error("constructor from boundary maps not implemented yet");
+
+  // // recursively construct darts for higher-dimensional cells
+  // for (size_t dim = 2; dim <= D; dim++) {
+  //   for (size_t iC = 0; iC < boundaryMaps[dim - 1].size(); iC++) {
+  //     cellDarts[dim].push_back(std::vector<std::vector<std::pair<size_t, bool>>>{});
+  //     for (std::pair<size_t, bool> bdyFace : boundaryMaps[dim - 1][iC]) {
+  //     }
+  //   }
+  // }
+
+
+  // std::vector<std::vector<std::pair<size_t, bool>>> darts;
+
+  // for (size_t iCell = 0; iCell < boundaryMaps[D - 1].size(); iCell++) {
+  // }
+
+
+  // // TODO: keep indices from input mesh
+  // for (size_t k = 0; k <= D; k++) indexCells(k);
+}
 
 
 template <size_t D>
@@ -1005,9 +1195,11 @@ void CombinatorialMap<D>::validateConnectivity() {
 
   for (size_t dim = 0; dim <= D; dim++) {
     if (nCellsCount[dim] > nCellsFillCount[dim])
-      throw std::logic_error(std::to_string(dim) + "-cell count > " + std::to_string(dim) + "-cell fill");
+      throw std::logic_error(std::to_string(dim) + "-cell count (" + std::to_string(nCellsCount[dim]) + ") > " +
+                             std::to_string(dim) + "-cell fill (" + std::to_string(nCellsFillCount[dim]) + ")");
     if (nCellsFillCount[dim] > nCellsCapacityCount[dim])
-      throw std::logic_error(std::to_string(dim) + "-cell fill > " + std::to_string(dim) + "-cell capacity");
+      throw std::logic_error(std::to_string(dim) + "-cell fill (" + std::to_string(nCellsFillCount[dim]) + ") > " +
+                             std::to_string(dim) + "-cell capacity (" + std::to_string(nCellsCapacityCount[dim]) + ")");
   }
 
   // Check for overflow / other unreasonable values
@@ -1088,162 +1280,6 @@ void CombinatorialMap<D>::validateConnectivity() {
   //     if (e != d.template cell<3>()) throw std::logic_error("3-cell dart doesn't match dart.cell<3>");
   //   }
   // }
-}
-
-template <size_t D>
-std::array<std::vector<size_t>, D - 1> constructDartMaps(const NestedVector<D - 1, size_t>& cells) {}
-
-template <>
-std::array<std::vector<size_t>, 1> constructDartMaps(const std::vector<size_t>& polygon) {
-  std::vector<size_t> next;
-  next.reserve(polygon.size());
-  for (size_t iD = 0; iD < polygon.size(); iD++) next.push_back((iD + 1) % polygon.size());
-  return {next};
-}
-
-template <>
-std::array<std::vector<size_t>, 2> constructDartMaps(const std::vector<std::vector<size_t>>& polygons) {
-  size_t nDarts = 0;
-  for (const std::vector<size_t>& face : polygons) nDarts += face.size();
-
-  std::array<std::vector<size_t>, 2> dartMap;
-  dartMap[0].reserve(nDarts);
-  dartMap[1] = std::vector<size_t>(nDarts); // allow random access to twin map
-
-  // map std::minmax(dart.tailvertex, dart.tipvertex) -> (dart id, dart orientation), helps construct twin map
-  std::map<std::pair<size_t, size_t>, std::pair<size_t, bool>> cellDarts;
-  size_t nCreatedDarts = 0;
-  for (size_t iF = 0; iF < polygons.size(); iF++) {
-    const std::vector<size_t>& face = polygons[iF];
-    for (size_t iD = 0; iD < face.size(); iD++) {
-      size_t jD = (iD + 1) % face.size();       // next dart around face
-      dartMap[0].push_back(nCreatedDarts + jD); // set next() to next dart around face
-      size_t vTail = face[iD], vTip = face[jD];
-      std::pair<size_t, size_t> key = std::minmax(vTail, vTip);
-      auto itTwin = cellDarts.find(key);
-      if (itTwin != cellDarts.end()) { // found another dart along this edge
-        GC_SAFETY_ASSERT((vTail < vTip) != itTwin->second.second, "cell orientation error: " + std::to_string(vTail) +
-                                                                      "->" + std::to_string(vTip) + " appears twice");
-        dartMap[1][nCreatedDarts + iD] = itTwin->second.first;
-        dartMap[1][itTwin->second.first] = nCreatedDarts + iD;
-      } else { // first time seeing this edge, save dart
-        cellDarts[key] = std::make_pair(nCreatedDarts + iD, (vTail < vTip));
-      }
-    }
-    nCreatedDarts += face.size();
-  }
-  return dartMap;
-}
-
-template <> // TODO: dedupe with 3-cell-complex constructor
-std::array<std::vector<size_t>, 3> constructDartMaps(const std::vector<std::vector<std::vector<size_t>>>& cells) {
-  std::array<std::vector<size_t>, 3> dartMap;
-
-  // set dartMaps[0 and 1] recursively in each cell
-  size_t nCreatedDarts = 0;
-  for (const std::vector<std::vector<size_t>>& cell : cells) {
-    std::array<std::vector<size_t>, 2> cellDartMaps = constructDartMaps<2>(cell);
-    for (size_t iD = 0; iD < cellDartMaps[0].size(); iD++) {
-      for (size_t dim = 0; dim < 2; dim++) dartMap[dim][nCreatedDarts + iD] = nCreatedDarts + cellDartMaps[dim][iD];
-    }
-    nCreatedDarts += cellDartMaps[0].size();
-  }
-
-  // set last dart map by looking up twins in a map
-  dartMap[2] = std::vector<size_t>(dartMap[0].size()); // allow random access to twin map
-
-  // take in canonicalized vertex list, return first dart index, number of shifts to canonicalize, orientation
-  std::map<std::vector<size_t>, std::tuple<size_t, int, bool>> createdDarts;
-
-  // turn input list into canonicalized vertex list, number of shifts, and orientation
-  struct CanonicalVertexList {
-    std::vector<size_t> vertices; // canonical ordering
-    int rotation;                 // how many times to rotate to get from input to canonical
-    bool orientation;             // false <=> input was flipped during canonicalization
-  };
-  auto canonicalize = [](std::vector<size_t> face) -> CanonicalVertexList {
-    size_t degree = face.size();
-
-    // find the minimum vertex index
-    size_t minIdx = 0;
-    for (size_t i = 1; i < degree; ++i) {
-      if (face[i] < face[minIdx]) minIdx = i;
-    }
-
-    // there are two possible orderings starting with the minimum vertex
-    // choose the unique ordering where the second vertex is smaller than the last
-    std::vector<size_t> result;
-    result.reserve(degree);
-    if (face[(minIdx + 1) % degree] < face[(minIdx + degree - 1) % degree]) {
-      for (size_t i = 0; i < degree; i++) result.push_back(face[(minIdx + i) % degree]); // f[minIdx], f[minIdx+1],...
-      return {result, static_cast<int>(minIdx), true};
-    } else {
-      for (size_t i = 0; i < degree; i++)
-        result.push_back(face[(minIdx + degree - i) % degree]); // f[minIdx], f[minIdx-1],...
-      return {result, static_cast<int>(minIdx), false};
-    }
-  };
-
-  auto oppDartLookup = [&](const std::vector<size_t>& face, const CanonicalVertexList& canon) -> size_t {
-    size_t degree = face.size();
-    auto dartIt = createdDarts.find(canon.vertices);
-    if (dartIt == createdDarts.end()) {
-      return INVALID_IND; // never seen this face with any orientation
-    } else {
-      // make sure this face hasn't already appeared with the same orientation
-      GC_SAFETY_ASSERT(canon.orientation != std::get<2>(dartIt->second),
-                       "tet mesh orientation problem: duplicate face {" + std::to_string(face[0]) + ", " +
-                           std::to_string(face[1]) + ", " + std::to_string(face[2]) + "}");
-
-      int storedRotation = std::get<1>(dartIt->second);
-      int inputRotation = canon.rotation;
-
-      // Since the faces have opposite orientations, we need to account for the reversal
-      int rotationDiff = (degree - 1 + inputRotation + storedRotation) % degree; // TODO why is this correct?
-
-      // if (DEBUG_PRINT)
-      //   std::cout << "stored rotation: " << storedRotation << "\t|input rotation: " << inputRotation
-      //             << "\t|diff: " << rotationDiff << std::endl;
-
-      // Apply dartMap[0] the appropriate number of times
-      size_t resultDart = std::get<0>(dartIt->second);
-      for (int i = 0; i < rotationDiff; ++i) {
-        resultDart = dartMap[0][resultDart];
-      }
-
-      return resultDart;
-    }
-  };
-
-  auto attachDartMap2 = [&](size_t iDart, size_t jDart) -> void {
-    dartMap[2][iDart] = jDart;
-    dartMap[2][jDart] = iDart;
-  };
-
-  size_t nPrevDarts = 0;
-  for (size_t iC = 0; iC < cells.size(); iC++) {
-    const std::vector<std::vector<size_t>>& cell = cells[iC];
-
-    // glue together opposite faces
-    for (size_t iF = 0; iF < cell.size(); ++iF) {
-      const std::vector<size_t> face = cell[iF];
-      CanonicalVertexList canon = canonicalize(face);
-      size_t twinFaceDart = oppDartLookup(face, canon);
-      if (twinFaceDart == INVALID_IND) {
-        // if the opposite face has not been created, set the dartMap[2] pointers to INVALID_IND
-        for (size_t iD = 0; iD < face.size(); iD++) dartMap[2][nPrevDarts + iD] = INVALID_IND;
-        createdDarts[canon.vertices] = std::make_tuple(nPrevDarts, canon.rotation, canon.orientation);
-      } else {
-        // if the opposite face has already created, hook up the appropriate pointers
-        for (size_t i = face.size(); i > 0; i--) {
-          attachDartMap2(nPrevDarts + (i % face.size()), twinFaceDart);
-          twinFaceDart = dartMap[0][twinFaceDart];
-        }
-      }
-      nPrevDarts += face.size();
-    }
-  }
-  return dartMap;
 }
 
 // ==========================================================
@@ -1370,48 +1406,6 @@ private:
   Dart<D> dStart;
   OrbitNeighborhoodIterator<D> cachedEnd;
 };
-
-//==== Helper struct for recursive traversal of nested vectors
-template <std::size_t D>
-struct NestedForEachHelper {
-  template <typename T, typename Function>
-  static void apply(NestedVector<D, T>& vec, Function f) {
-    for (auto& elem : vec) {
-      NestedForEachHelper<D - 1>::apply(elem, f);
-    }
-  }
-
-  template <typename T, typename Function>
-  static void apply(const NestedVector<D, T>& vec, Function f) {
-    for (const auto& elem : vec) {
-      NestedForEachHelper<D - 1>::apply(elem, f);
-    }
-  }
-};
-
-// Base case specialization for D = 0
-template <>
-struct NestedForEachHelper<0> {
-  template <typename T, typename Function>
-  static void apply(T& elem, Function f) {
-    f(elem);
-  }
-
-  template <typename T, typename Function>
-  static void apply(const T& elem, Function f) {
-    f(elem);
-  }
-};
-
-// nested for-each loops
-template <std::size_t D, typename T, typename Function>
-void nestedForEach(NestedVector<D, T>& vec, Function f) {
-  NestedForEachHelper<D>::apply(vec, f);
-}
-template <std::size_t D, typename T, typename Function>
-void nestedForEach(const NestedVector<D, T>& vec, Function f) {
-  NestedForEachHelper<D>::apply(vec, f);
-}
 
 } // namespace combinatorial_map
 } // namespace geometrycentral

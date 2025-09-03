@@ -99,6 +99,7 @@ public:
   std::vector<Face<D>> adjacentFaces() const;
 
   bool isDead() const;
+  bool isBoundary() const;
 
   bool orientation() const;
   void flipOrientation();

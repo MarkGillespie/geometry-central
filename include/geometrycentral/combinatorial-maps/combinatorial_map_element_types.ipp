@@ -129,6 +129,18 @@ inline bool Cell<k, D>::isDead() const {
 }
 
 template <size_t k, size_t D>
+inline bool Cell<k, D>::isBoundary() const {
+  if (k == D - 1) {
+    return dart().partner(D - 1) == dart();
+  } else {
+    for (Cell<D - 1, D> facet : adjacentCells<D - 1>()) {
+      if (facet.isBoundary()) return true;
+    }
+    return false;
+  }
+}
+
+template <size_t k, size_t D>
 inline bool Cell<k, D>::orientation() const {
   return mOrientation;
 }

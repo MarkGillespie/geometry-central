@@ -66,6 +66,14 @@ public:
   // Construct a cell complex given as a list of (D-1)-complexes
   CombinatorialMap(const NestedVector<D, size_t>& cells);
 
+  // Construct a cell complex given as an array of boundary matrices
+  // CombinatorialMap(const std::array<SparseMatrix<int>, D>& boundaryMatrices);
+
+  // boundaryMap[k] is the boundary map on k+1-cells. boundaryMap[k][i] is a list of k-faces incident on (k+1)-face i,
+  // with their relative orientations
+  // boundaryMap[1][i] must list the edges in face i in counterclockwise order
+  CombinatorialMap(const std::array<std::vector<std::vector<std::pair<size_t, bool>>>, D>& boundaryMaps);
+
   ~CombinatorialMap();
 
 
@@ -204,6 +212,8 @@ protected:
   // Construct directly from internal arrays
   CombinatorialMap(const std::array<std::vector<size_t>, D>& dartMap);
 
+  void constructFromBoundaryMaps(const std::array<std::vector<std::vector<std::pair<size_t, bool>>>, D>& boundaryMaps);
+
   // = Core arrays which hold the connectivity
   // Note: it should always be true that heFace.size() == nDartsCapacityCount, but any elements after
   // nDartsFillCount will be valid indices (in the std::vector sense), but contain uninitialized data. Similarly,
@@ -253,11 +263,16 @@ protected:
 
   // Used to resize the halfedge mesh. Expands and shifts vectors as necessary.
   Dart<D> getNewDart();
+  void allocateDarts(size_t n); // ensure we have space for n more darts
 
   template <size_t k>
   Cell<k, D> getNewCell();
 
   size_t getNewCellIndex(size_t k); // equal to getNewCell<k>().index()
+
+  void allocateCells(size_t k, size_t n); // ensure we have space for n more k-cells
+  template <size_t k>
+  void allocateCells(size_t n); // ensure we have space for n more k-cells
 
   // Detect dead elements
   bool dartIsDead(size_t iD) const;
@@ -281,7 +296,6 @@ protected:
   // replace values of i in arr with oldToNew[i] (skipping INVALID_IND)
   void updateValues(std::vector<size_t>& arr, const std::vector<size_t>& oldToNew);
 
-
   // Elements need direct access in to members to traverse
   friend class Dart<D>;
   friend struct DartRangeF<D>;
@@ -292,32 +306,13 @@ protected:
   friend struct CellRangeF;
 };
 
-template <size_t D>
-std::array<std::vector<size_t>, D> constructDartMaps(const NestedVector<D, size_t>& cells);
-
-template <std::size_t D, typename T> // Recursive template struct for nested lists
-struct NestedVectorImpl {
-  using type = std::vector<typename NestedVectorImpl<D - 1, T>::type>;
-};
-
-template <typename T> // Base case specialization for D = 0
-struct NestedVectorImpl<0, T> {
-  using type = T;
-};
-
-// nested vector for-each - non-const version
-template <std::size_t D, typename T, typename Function>
-void nestedForEach(NestedVector<D, T>& vec, Function f);
-template <std::size_t D, typename T, typename Function>
-void nestedForEach(const NestedVector<D, T>& vec, Function f);
-
-
 } // namespace combinatorial_map
 } // namespace geometrycentral
 
 // clang-format off
 // preserve ordering
 // #include "geometrycentral/combinatorial-maps/dart_logic_templates.ipp"
+#include "geometrycentral/combinatorial-maps/nested_vector.ipp"
 #include "geometrycentral/combinatorial-maps/combinatorial_map.ipp"
 #include "geometrycentral/combinatorial-maps/combinatorial_map_element_types.ipp"
 // clang-format on
