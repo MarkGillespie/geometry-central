@@ -61,7 +61,7 @@ class CombinatorialMap {
 
 public:
   // Construct a simplicial complex from a list of oriented simplices
-  CombinatorialMap(const std::vector<std::array<size_t, D + 1>>& cells);
+  CombinatorialMap(const std::vector<std::array<size_t, D + 1>>& simplices);
 
   // Construct a cell complex given as a list of (D-1)-complexes
   CombinatorialMap(const NestedVector<D, size_t>& cells);

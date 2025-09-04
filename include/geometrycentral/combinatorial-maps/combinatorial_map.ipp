@@ -854,9 +854,9 @@ CombinatorialMap<D>::CombinatorialMap(const std::vector<std::array<size_t, D + 1
   for (size_t k = 1; k < D; k++) indexCells(k);
 }
 
-// TODO: finish this, maybe by constructing boundary matrices
-template <size_t D>
-CombinatorialMap<D>::CombinatorialMap(const NestedVector<D, size_t>& cells) {}
+// // TODO: finish this, maybe by constructing boundary matrices
+// template <size_t D>
+// CombinatorialMap<D>::CombinatorialMap(const NestedVector<D, size_t>& cells) {}
 
 #ifdef SPECIALIZATIONS
 
@@ -1074,32 +1074,33 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<std::vector<
 //   }
 // }
 
-// Builds a 2D polygon mesh
-template <>
-CombinatorialMap<2>::CombinatorialMap(const std::vector<std::vector<size_t>>& polygons) {
-  std::map<std::pair<size_t, size_t>, size_t> edgeIndices;
-  size_t nEdges = 0;
+// TODO: construct d-dimensional version properly
+// // Builds a 2D polygon mesh
+// template <>
+// CombinatorialMap<2>::CombinatorialMap(const std::vector<std::vector<size_t>>& polygons) {
+//   std::map<std::pair<size_t, size_t>, size_t> edgeIndices;
+//   size_t nEdges = 0;
 
-  std::array<std::vector<std::vector<std::pair<size_t, bool>>>, 2> boundaryMaps;
+//   std::array<std::vector<std::vector<std::pair<size_t, bool>>>, 2> boundaryMaps;
 
-  for (const std::vector<size_t>& face : polygons) {
-    boundaryMaps[1].push_back(std::vector<std::pair<size_t, bool>>{});
-    for (size_t iE = 0; iE < face.size(); iE++) {
-      size_t vi = face[iE], vj = face[(iE + 1) % face.size()];
-      std::pair<size_t, size_t> key = std::minmax(vi, vj);
-      bool orientation = vi < vj;
-      if (edgeIndices.find(key) == edgeIndices.end()) { // first time seeing this edge, add to boundary map
-        edgeIndices[key] = nEdges;
-        boundaryMaps[0].push_back(
-            std::vector<std::pair<size_t, bool>>{std::make_pair(vj, orientation), std::make_pair(vi, !orientation)});
-        nEdges++;
-      }
-      boundaryMaps[1].back().push_back(std::make_pair(edgeIndices[key], orientation));
-    }
-  }
+//   for (const std::vector<size_t>& face : polygons) {
+//     boundaryMaps[1].push_back(std::vector<std::pair<size_t, bool>>{});
+//     for (size_t iE = 0; iE < face.size(); iE++) {
+//       size_t vi = face[iE], vj = face[(iE + 1) % face.size()];
+//       std::pair<size_t, size_t> key = std::minmax(vi, vj);
+//       bool orientation = vi < vj;
+//       if (edgeIndices.find(key) == edgeIndices.end()) { // first time seeing this edge, add to boundary map
+//         edgeIndices[key] = nEdges;
+//         boundaryMaps[0].push_back(
+//             std::vector<std::pair<size_t, bool>>{std::make_pair(vj, orientation), std::make_pair(vi, !orientation)});
+//         nEdges++;
+//       }
+//       boundaryMaps[1].back().push_back(std::make_pair(edgeIndices[key], orientation));
+//     }
+//   }
 
-  constructFromBoundaryMaps(boundaryMaps);
-}
+//   constructFromBoundaryMaps(boundaryMaps);
+// }
 
 template <size_t D> // Construct a cell complex given as an array of boundary matrices
 // CombinatorialMap<D>::CombinatorialMap(const std::array<SparseMatrix<int>, D>& boundaryMatrices) {
