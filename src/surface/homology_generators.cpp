@@ -56,15 +56,45 @@ HomologyGenerators computeHomologyGenerators(ManifoldSurfaceMesh& mesh, Homology
 
 // Returns harmonic 1-forms dual to the given generators
 HarmonicGenerators computeHarmonicGenerators(ManifoldSurfaceMesh& mesh, IntrinsicGeometryInterface& geom,
-                                             const HomologyGenerators& generators) {
+                                             const HomologyGenerators& generators, bool computePrimal,
+                                             bool computeDual) {
   auto sign = [&](Halfedge ij) -> double { return ij.orientation() ? 1. : -1.; };
   HarmonicGenerators result;
   geom.requireCotanLaplacian();
   geom.requireDECOperators();
-  const SparseMatrix<double>& L0 = geom.cotanLaplacian;
+  SparseMatrix<double> L0 = geom.cotanLaplacian;
   const SparseMatrix<double>&d0 = geom.d0, &d1 = geom.d1;
   const SparseMatrix<double>&hodge1 = geom.hodge1, hodge1Inv = geom.hodge1Inverse;
-  SparseMatrix<double> L1 = d1 * hodge1Inv * d1.transpose();
+  SparseMatrix<double> L2 = d1 * hodge1Inv * d1.transpose();
+
+  std::vector<Eigen::Triplet<double>> d1DirichletTriplets, d1NeumannTriplets;
+  geom.requireFaceIndices();
+  geom.requireEdgeIndices();
+  const FaceData<size_t>& fIdx = geom.faceIndices;
+  const EdgeData<size_t>& eIdx = geom.edgeIndices;
+  for (Face f : mesh.faces()) {
+    size_t iF = fIdx[f];
+    for (Halfedge h : f.adjacentHalfedges()) {
+      size_t iE = eIdx[h.edge()];
+      if (h.edge().isBoundary()) {
+        d1DirichletTriplets.emplace_back(iF, iE, 1);
+        // d1NeumannTriplets.emplace_back(iF, iE, 0); // don't need to set zero coefficient
+      } else {
+        d1DirichletTriplets.emplace_back(iF, iE, sign(h));
+        d1NeumannTriplets.emplace_back(iF, iE, sign(h));
+      }
+    }
+  }
+  geom.unrequireEdgeIndices();
+  geom.unrequireFaceIndices();
+
+  size_t nE = mesh.nEdges(), nF = mesh.nFaces();
+  SparseMatrix<double> d1Dirichlet(nF, nE), d1Neumann(nF, nE);
+  d1Dirichlet.setFromTriplets(d1DirichletTriplets.begin(), d1DirichletTriplets.end());
+  d1Neumann.setFromTriplets(d1NeumannTriplets.begin(), d1NeumannTriplets.end());
+
+  SparseMatrix<double> L2Dirichlet = d1Dirichlet * hodge1Inv * d1Dirichlet.transpose();
+  SparseMatrix<double> L2Neumann = d1Neumann * hodge1Inv * d1Neumann.transpose();
 
   VertexData<bool> isInteriorVertex(mesh, true);
   for (BoundaryLoop b : mesh.boundaryLoops()) {
@@ -75,56 +105,71 @@ HarmonicGenerators computeHarmonicGenerators(ManifoldSurfaceMesh& mesh, Intrinsi
   SparseMatrix<double> L0ii = decomp0.AA;
   const SparseMatrix<double>& L0ib = decomp0.AB;
 
-  //===== get primal harmonic generators by solving for jump across dual generators
-  // impose zero Neumann boundary condition on potential
-  result.primalGenerators.reserve(generators.dualGenerators.size());
-  for (const std::vector<Halfedge>& dualGenerator : generators.dualGenerators) {
-    EdgeData<double> jump(mesh, 0);
-    for (Halfedge ij : dualGenerator) jump[ij.edge()] += sign(ij);
+  if (computePrimal) { //===== get primal harmonic generators by solving for jump across dual generators
+    result.primalGenerators.reserve(generators.dualGenerators.size());
+    result.primalType =
+        (generators.primalType == HomologyType::Absolute) ? HomologyType::Relative : HomologyType::Absolute;
+    for (const std::vector<Halfedge>& dualGenerator : generators.dualGenerators) {
+      EdgeData<double> jump(mesh, 0);
+      for (Halfedge ij : dualGenerator) jump[ij.edge()] += sign(ij);
 
-    // let jump = d0 α + *^{-1} d1^T β + γ where α has zero-Dirichlet boundary conditions, and γ has zero-Neumann
-    // then d0^T * d0 α = d0^T *1 jump, and d1 *^{-1} d1^T β = d1 jump
-    Vector<double> alpha, beta;
-
-    { // alpha; impose zero-Dirichlet boundary condition on potential
-      Vector<double> fullRHS = d0.transpose() * hodge1 * jump.raw(), iRHS, bRHS;
-      decomposeVector(decomp0, fullRHS, iRHS, bRHS);
-
-      Vector<double> iPotential = solvePositiveDefinite(L0ii, iRHS);
-      Vector<double> bPotential = Vector<double>::Zero(bRHS.size());
-      alpha = reassembleVector(decomp0, iPotential, bPotential);
-    }
-
-    { // beta; impose zero-Neumann boundary condition on potential
-      Vector<double> rhs = d1 * jump.raw();
-      beta = solvePositiveDefinite(L1, rhs);
-    }
-
-    EdgeData<double> gamma(mesh, jump.raw() - d0 * alpha - hodge1Inv * d1.transpose() * beta);
-    result.primalGenerators.push_back(gamma);
-  }
-
-  for (size_t iG = 0; iG < generators.dualGenerators.size(); iG++) {
-    const std::vector<Halfedge>& dualGenerator = generators.dualGenerators[iG];
-    const EdgeData<double>& gamma = result.primalGenerators[iG];
-    for (size_t iH = 0; iH < generators.primalGenerators.size(); iH++) {
-      const std::vector<Halfedge>& primalGenerator = generators.primalGenerators[iH];
-      double gammaIntegral = 0;
-      for (Halfedge ij : primalGenerator) gammaIntegral += sign(ij) * gamma[ij.edge()];
-      std::cout << "int gamma (" << iG << ", " << iH << "): " << gammaIntegral << std::endl;
-
-      double intersectionCount = 0;
-      for (Halfedge ij : primalGenerator) {
-        for (Halfedge ab : dualGenerator) {
-          if (ij.edge() == ab.edge()) intersectionCount += sign(ij) * sign(ab);
-        }
+      // Solve for a jump-harmonic function w/ given jump and appropriate boundary conditions
+      Vector<double> alpha;
+      switch (generators.primalType) {
+      case HomologyType::Absolute: { // impose zero-Neumann boundary condition on potential
+        Vector<double> rhs = d0.transpose() * hodge1 * jump.raw();
+        alpha = solvePositiveDefinite(L0, rhs);
+        break;
       }
-      std::cout << "intersect (" << iG << ", " << iH << "): " << intersectionCount << std::endl;
+      case HomologyType::Relative: { // impose zero-Dirichlet boundary condition on potential
+        Vector<double> rhs = d0.transpose() * hodge1 * jump.raw();
+        alpha = solvePositiveDefinite(L0, rhs);
+
+        Vector<double> fullRHS = d0.transpose() * hodge1 * jump.raw(), iRHS, bRHS;
+        decomposeVector(decomp0, fullRHS, iRHS, bRHS);
+
+        Vector<double> iPotential = solvePositiveDefinite(L0ii, iRHS);
+        Vector<double> bPotential = Vector<double>::Zero(bRHS.size());
+        alpha = reassembleVector(decomp0, iPotential, bPotential);
+        break;
+      }
+      }
+
+      EdgeData<double> gamma(mesh, d0 * alpha);
+      for (Halfedge ij : dualGenerator) gamma[ij.edge()] -= sign(ij);
+      result.primalGenerators.push_back(gamma);
     }
   }
 
-  //===== dual generators
-  result.dualGenerators.reserve(generators.dualGenerators.size());
+  if (computeDual) { //===== get dual harmonic generators by solving for jump across primal generators
+    result.dualGenerators.reserve(generators.primalGenerators.size());
+    result.dualType = (generators.dualType == HomologyType::Absolute) ? HomologyType::Relative : HomologyType::Absolute;
+    for (const std::vector<Halfedge>& primalGenerator : generators.primalGenerators) {
+      EdgeData<double> jump(mesh, 0);
+      for (Halfedge ij : primalGenerator) jump[ij.edge()] += sign(ij);
+
+      // Solve for a jump-harmonic function w/ given jump and appropriate boundary conditions
+      EdgeData<double> gamma;
+      switch (generators.dualType) {
+      case HomologyType::Absolute: { // impose zero-Neumann boundary condition on potential
+        Vector<double> rhs = d1Neumann * hodge1Inv * jump.raw();
+        Vector<double> beta = solvePositiveDefinite(L2Neumann, rhs);
+        gamma = EdgeData<double>(mesh, d1Neumann.transpose() * beta);
+        break;
+      }
+      case HomologyType::Relative: { // impose zero-Dirichlet boundary condition on potential
+        Vector<double> rhs = d1Dirichlet * hodge1Inv * jump.raw();
+        Vector<double> beta = solvePositiveDefinite(L2Dirichlet, rhs);
+        gamma = EdgeData<double>(mesh, d1Dirichlet.transpose() * beta);
+        break;
+      }
+      }
+
+      for (Halfedge ij : primalGenerator) gamma[ij.edge()] -= sign(ij);
+      result.dualGenerators.push_back(gamma);
+    }
+  }
+
   geom.unrequireDECOperators();
   geom.unrequireCotanLaplacian();
   return result;
@@ -132,9 +177,45 @@ HarmonicGenerators computeHarmonicGenerators(ManifoldSurfaceMesh& mesh, Intrinsi
 
 // Returns harmonic 1-forms dual to the generators specified by opt
 HarmonicGenerators computeHarmonicGenerators(ManifoldSurfaceMesh& mesh, IntrinsicGeometryInterface& geom,
-                                             HomologyGeneratorOptions opt) {
+                                             HomologyGeneratorType homologyType) {
+  // Set options for homology generator loops. Note that even if we only want to compute one set of harmonic generators,
+  // the algorithm requires both sets of homology generators
+  bool computePrimal, computeDual;
+  HomologyGeneratorOptions opt;
+  switch (homologyType) {
+  case HomologyGeneratorType::AbsolutePrimalRelativeDual:
+    computePrimal = true;
+    computeDual = true;
+    opt.generatorType = HomologyGeneratorType::AbsolutePrimalRelativeDual;
+    break;
+  case HomologyGeneratorType::AbsolutePrimal:
+    computePrimal = true;
+    computeDual = false;
+    opt.generatorType = HomologyGeneratorType::AbsolutePrimalRelativeDual;
+    break;
+  case HomologyGeneratorType::RelativeDual:
+    computePrimal = false;
+    computeDual = true;
+    opt.generatorType = HomologyGeneratorType::AbsolutePrimalRelativeDual;
+    break;
+  case HomologyGeneratorType::RelativePrimalAbsoluteDual:
+    computePrimal = true;
+    computeDual = true;
+    opt.generatorType = HomologyGeneratorType::RelativePrimalAbsoluteDual;
+    break;
+  case HomologyGeneratorType::RelativePrimal:
+    computePrimal = true;
+    computeDual = false;
+    opt.generatorType = HomologyGeneratorType::RelativePrimalAbsoluteDual;
+    break;
+  case HomologyGeneratorType::AbsoluteDual:
+    computePrimal = false;
+    computeDual = true;
+    opt.generatorType = HomologyGeneratorType::RelativePrimalAbsoluteDual;
+    break;
+  }
   HomologyGenerators generators = computeHomologyGenerators(mesh, opt);
-  return computeHarmonicGenerators(mesh, geom, generators);
+  return computeHarmonicGenerators(mesh, geom, generators, computePrimal, computeDual);
 }
 
 namespace TreeCotree {
@@ -249,7 +330,7 @@ std::vector<Halfedge> extractPrimalGenerator(const VertexData<Halfedge>& primalT
 std::vector<Halfedge> extractDualGenerator(const FaceData<Halfedge>& dualTree, Halfedge ij) {
   std::vector<Halfedge> forwardPath = walkUpDualTree(dualTree, ij.face());
   std::vector<Halfedge> backwardPath = walkUpDualTree(dualTree, ij.twin().face());
-  return glueAndTrimPaths(forwardPath, ij, backwardPath);
+  return glueAndTrimPaths(forwardPath, ij.twin(), backwardPath);
 }
 
 std::vector<Halfedge> walkUpPrimalTree(const VertexData<Halfedge>& primalTree, Vertex start) {
@@ -321,8 +402,45 @@ HomologyType dualHomologyType(HomologyGeneratorType generatorType) {
   }
   return HomologyType::Absolute; // should not be reachable
 }
-
 } // namespace TreeCotree
+
+std::string to_string(HomologyType homologyType) {
+  switch (homologyType) {
+  case HomologyType::Absolute:
+    return "HomologyType::Absolute";
+  case HomologyType::Relative:
+    return "HomologyType::Relative";
+  }
+  return ""; // should not be reachable
+}
+
+std::string to_string(HomologyGeneratorType homologyGeneratorType) {
+  switch (homologyGeneratorType) {
+  case HomologyGeneratorType::AbsolutePrimalRelativeDual:
+    return "HomologyGeneratorType::AbsolutePrimalRelativeDual";
+  case HomologyGeneratorType::AbsolutePrimal:
+    return "HomologyGeneratorType::AbsolutePrimal";
+  case HomologyGeneratorType::RelativeDual:
+    return "HomologyGeneratorType::RelativeDual";
+  case HomologyGeneratorType::RelativePrimalAbsoluteDual:
+    return "HomologyGeneratorType::RelativePrimalAbsoluteDual";
+  case HomologyGeneratorType::RelativePrimal:
+    return "HomologyGeneratorType::RelativePrimal";
+  case HomologyGeneratorType::AbsoluteDual:
+    return "HomologyGeneratorType::AbsoluteDual";
+  }
+  return ""; // should not be reachable
+}
+
+std::ostream& operator<<(std::ostream& os, HomologyType homologyType) {
+  os << to_string(homologyType);
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, HomologyGeneratorType homologyGeneratorType) {
+  os << to_string(homologyGeneratorType);
+  return os;
+}
 
 } // namespace surface
 } // namespace geometrycentral

@@ -25,7 +25,6 @@ struct HarmonicGenerators {
   HomologyType dualType;
 };
 
-
 enum class HomologyGeneratorType {
   AbsolutePrimal,
   RelativePrimal,
@@ -52,13 +51,14 @@ HomologyGenerators computeHomologyGenerators(ManifoldSurfaceMesh& mesh,
 // HarmonicGenerators::primalGenerators are normalized to integrate to 1 along HomologyGenerators::primalGenerators, and
 // HarmonicGenerators::dualGenerators are normalized to integrate to 1 along HomologyGenerators::dualGenerators
 HarmonicGenerators computeHarmonicGenerators(ManifoldSurfaceMesh& mesh, IntrinsicGeometryInterface& geom,
-                                             const HomologyGenerators& generators);
+                                             const HomologyGenerators& generators, bool computePrimal = true,
+                                             bool computeDual = true);
 
 // Returns harmonic 1-forms dual to the generators specified by opt
 // HarmonicGenerators::primalGenerators are normalized to integrate to 1 along HomologyGenerators::primalGenerators, and
 // HarmonicGenerators::dualGenerators are normalized to integrate to 1 along HomologyGenerators::dualGenerators
 HarmonicGenerators computeHarmonicGenerators(ManifoldSurfaceMesh& mesh, IntrinsicGeometryInterface& geom,
-                                             HomologyGeneratorOptions opt = defaultHomologyGeneratorOptions);
+                                             HomologyGeneratorType homologyType);
 
 //=== helpers
 namespace TreeCotree {
@@ -85,6 +85,11 @@ HomologyType primalHomologyType(HomologyGeneratorType generatorType);
 HomologyType dualHomologyType(HomologyGeneratorType generatorType);
 
 } // namespace TreeCotree
+
+std::string to_string(HomologyType homologyType);
+std::string to_string(HomologyGeneratorType homologyGeneratorType);
+std::ostream& operator<<(std::ostream& os, HomologyType homologyType);
+std::ostream& operator<<(std::ostream& os, HomologyGeneratorType homologyGeneratorType);
 
 } // namespace surface
 } // namespace geometrycentral

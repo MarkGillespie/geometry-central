@@ -108,6 +108,7 @@ set(TEST_SRCS
   src/poisson_disk_sampler_test.cpp
   src/stl_reader_test.cpp
   src/surface_misc_test.cpp
+  src/homology_generator_test.cpp
 )
 
 add_executable(geometry-central-test "${TEST_SRCS}")
