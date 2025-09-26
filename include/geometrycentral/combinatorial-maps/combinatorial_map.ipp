@@ -1160,9 +1160,9 @@ CombinatorialMap<D>::CombinatorialMap(const std::vector<std::array<size_t, D + 1
   for (size_t k = 1; k < D; k++) indexCells(k);
 }
 
-// TODO: finish this, maybe by constructing boundary matrices
-template <size_t D>
-CombinatorialMap<D>::CombinatorialMap(const NestedVector<D, size_t>& cells) {}
+// // TODO: finish this, maybe by constructing boundary matrices
+// template <size_t D>
+// CombinatorialMap<D>::CombinatorialMap(const NestedVector<D, size_t>& cells) {}
 
 #ifdef SPECIALIZATIONS
 
@@ -1380,6 +1380,7 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<std::vector<
 //   }
 // }
 
+// TODO: construct d-dimensional version properly
 // // Builds a 2D polygon mesh
 // template <>
 // CombinatorialMap<2>::CombinatorialMap(const std::vector<std::vector<size_t>>& polygons) {
