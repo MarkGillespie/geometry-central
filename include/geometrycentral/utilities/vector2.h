@@ -1,6 +1,7 @@
 #pragma once
 
 #include "geometrycentral/utilities/vector3.h"
+#include <Eigen/Dense>
 
 #include <array>
 #include <cmath>
@@ -18,6 +19,7 @@ struct Vector2 {
   static Vector2 constant(double c) { return Vector2{c, c}; }
   static Vector2 fromAngle(double theta) { return Vector2{std::cos(theta), std::sin(theta)}; }
   static Vector2 fromComplex(std::complex<double> c) { return Vector2{c.real(), c.imag()}; }
+  static Vector2 fromEigen(Eigen::Vector2d v) { return Vector2{v(0), v(1)}; }
   static Vector2 infinity() {
     const double inf = std::numeric_limits<double>::infinity();
     return Vector2{inf, inf};
@@ -53,6 +55,8 @@ struct Vector2 {
 
   // Conversion to std::complex
   operator std::complex<double>() const;
+  // Conversion to Eigen::Vector2d
+  operator Eigen::Vector2d() const;
 
   // The non-member functions below return a new object; they do not modify in-place.
 

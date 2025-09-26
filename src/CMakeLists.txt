@@ -89,6 +89,9 @@ SET(SRCS
   utilities/knn.cpp
   utilities/elementary_geometry.cpp
   utilities/tri_tri_intersect.cpp
+
+  volume/vertex_position_geometry.cpp
+  volume/weighted_triangulation.cpp
 )
 
 SET(INCLUDE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../include/geometrycentral/")
@@ -178,6 +181,10 @@ SET(HEADERS
   ${INCLUDE_ROOT}/utilities/vector2.ipp
   ${INCLUDE_ROOT}/utilities/vector3.h
   ${INCLUDE_ROOT}/utilities/vector3.ipp
+
+  ${INCLUDE_ROOT}/volume/manifold_volume_mesh.h
+  ${INCLUDE_ROOT}/volume/vertex_position_geometry.h
+  ${INCLUDE_ROOT}/volume/weighted_triangulation.h
 )
 
 # Create a single library for the project

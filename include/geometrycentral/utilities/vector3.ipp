@@ -50,6 +50,8 @@ inline bool Vector3::operator==(const Vector3& other) const { return x == other.
 
 inline bool Vector3::operator!=(const Vector3& other) const { return !(*this == other); }
 
+inline Vector3::operator Eigen::Vector3d() const { return Eigen::Vector3d{x, y, z}; }
+
 inline double Vector3::norm() const { return std::sqrt(x * x + y * y + z * z); }
 inline double norm(const Vector3& v) { return v.norm(); }
 

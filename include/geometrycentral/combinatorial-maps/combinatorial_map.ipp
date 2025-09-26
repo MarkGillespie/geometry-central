@@ -18,8 +18,17 @@ inline size_t CombinatorialMap<D>::nCells() const {
 }
 
 template <size_t D>
+template <size_t k1, size_t k2>
+inline size_t CombinatorialMap<D>::nIncidences() const { // WARNING: if incidences have not been used, returns 0
+  static_assert(k1 < k2, "an incidence must have cell dimensions k1 < k2");
+  static_assert(k2 <= D, "cell dimension k2 must be less than or equal to complex dimension D");
+  auto it = nIncidencesCount.find(std::make_pair(k1, k2));
+  return it == nIncidencesCount.end() ? 0 : it->second;
+}
+
+template <size_t D>
 template <size_t k>
-std::vector<Dart<D>> CombinatorialMap<D>::adjacentDarts(Cell<k, D> cell) {
+std::vector<Dart<D>> CombinatorialMap<D>::adjacentDarts(Cell<k, D> cell) const {
   static_assert(k <= D, "input cell dimension k must be less than or equal to complex dimension D");
 
   // to find all adjacent darts, we express the input cell as an orbit of dart maps,
@@ -39,6 +48,33 @@ std::vector<Dart<D>> CombinatorialMap<D>::adjacentDarts(Cell<k, D> cell) {
       if (std::find(neighbors.begin(), neighbors.end(), n.first) == neighbors.end()) {
         neighbors.push_back(n.first);
         dartsToVisit.push_back(n.first);
+      }
+    }
+  }
+
+  return neighbors;
+}
+
+template <size_t D>
+template <size_t k1, size_t k2>
+std::vector<Dart<D>> CombinatorialMap<D>::adjacentDarts(Incidence<k1, k2, D> incidence) const {
+  // to find all adjacent darts, we express the input cell as an orbit of dart maps,
+  std::vector<Dart<D>> neighbors;
+  neighbors.reserve(16); // reserve some amount of space
+
+  std::deque<Dart<D>> dartsToVisit;
+  dartsToVisit.push_back(incidence.dart());
+  neighbors.push_back(incidence.dart());
+
+  while (!dartsToVisit.empty()) {
+    // for some reason, iterating in DFS order is important for orienting cells
+    Dart<D> curr = dartsToVisit.back();
+    dartsToVisit.pop_back();
+
+    for (Dart<D> n : incidenceNeighboringDarts(curr, k1, k2)) {
+      if (std::find(neighbors.begin(), neighbors.end(), n) == neighbors.end()) {
+        neighbors.push_back(n);
+        dartsToVisit.push_back(n);
       }
     }
   }
@@ -88,6 +124,44 @@ std::vector<Cell<k2, D>> CombinatorialMap<D>::adjacentCells(Cell<k1, D> cell) co
 }
 
 template <size_t D>
+template <size_t k1, size_t k2, size_t k>
+std::vector<Cell<k, D>> CombinatorialMap<D>::adjacentCells(Incidence<k1, k2, D> incidence) const {
+  // to find all adjacent darts, we express the input cell as an orbit of dart maps,
+  std::vector<Cell<k, D>> neighbors;
+  std::vector<Dart<D>> seenDarts;
+  neighbors.reserve(16); // reserve some amount of space
+  seenDarts.reserve(16); // reserve some amount of space
+
+  std::deque<Dart<D>> dartsToVisit;
+  dartsToVisit.push_back(incidence.dart());
+  seenDarts.push_back(incidence.dart());
+
+  while (!dartsToVisit.empty()) {
+    // for some reason, iterating in DFS order is important for orienting cells
+    Dart<D> curr = dartsToVisit.back();
+    dartsToVisit.pop_back();
+
+    Cell<k, D> currCell = curr.template cell<k>();
+    if (std::find(neighbors.begin(), neighbors.end(), currCell) == neighbors.end()) {
+      neighbors.push_back(currCell);
+    }
+
+    for (Dart<D> n : incidenceNeighboringDarts(curr, k1, k2)) {
+      if (std::find(seenDarts.begin(), seenDarts.end(), n) == seenDarts.end()) {
+        dartsToVisit.push_back(n);
+        seenDarts.push_back(n);
+      }
+    }
+  }
+
+  if (k == 0 && k1 == 1) { // since we don't use implicit twin, this one case of the tip vertex of a wedge can be missed
+    Cell<k, D> tipVertex = incidence.dart().next().template cell<k>();
+    if (std::find(neighbors.begin(), neighbors.end(), tipVertex) == neighbors.end()) neighbors.push_back(tipVertex);
+  }
+  return neighbors;
+}
+
+template <size_t D>
 template <size_t k>
 std::vector<Vertex<D>> CombinatorialMap<D>::adjacentVertices(Cell<k, D> cell) const {
   return adjacentCells<k, 0>(cell);
@@ -105,6 +179,86 @@ std::vector<Face<D>> CombinatorialMap<D>::adjacentFaces(Cell<k, D> cell) const {
   return adjacentCells<k, 2>(cell);
 }
 
+// Returns a dart in c1 which is also in c2, or Dart<D>() if no such dart can be found
+template <size_t D>
+template <size_t k1, size_t k2>
+Dart<D> CombinatorialMap<D>::adjacentDartInCell(Cell<k1, D> c1, Cell<k2, D> c2) const {
+  static_assert(k1 <= D, "cell dimension k1 must be less than or equal to complex dimension D");
+  static_assert(k2 <= D, "cell dimension k2 must be less than or equal to complex dimension D");
+
+  // to find all adjacent k2-cells, we express the input cell as an orbit of dart maps,
+  // and call d.cell<k2>() for each of these darts
+  std::vector<Dart<D>> seenDarts;
+  seenDarts.reserve(16); // reserve some amount of space
+
+  std::deque<Dart<D>> dartsToVisit;
+  dartsToVisit.push_back(c1.dart());
+  seenDarts.push_back(c1.dart());
+
+  while (!dartsToVisit.empty()) {
+    Dart<D> currDart = dartsToVisit.back();
+    dartsToVisit.pop_back();
+
+    if (currDart.template cell<k2>() == c2) return currDart;
+
+    for (std::pair<Dart<D>, bool> n : orbitNeighbors(currDart, k1)) {
+      if (std::find(seenDarts.begin(), seenDarts.end(), n.first) == seenDarts.end()) {
+        dartsToVisit.push_back(n.first);
+        seenDarts.push_back(n.first);
+      }
+    }
+  }
+
+  return Dart<D>();
+}
+
+// OrderedIncidence<a, b> is just an ordinary incidence, but with a and b ordered properly, i.e. Incidence<a,b> if a <
+// b and Incidence<b,a> otherwise
+template <size_t D>
+template <size_t k1, size_t k2>
+std::vector<OrderedIncidence<k1, k2, D>> CombinatorialMap<D>::adjacentIncidences(Cell<k1, D> cell) {
+  static_assert(k1 <= D, "input cell dimension k1 must be less than or equal to complex dimension D");
+  static_assert(k2 <= D, "incident cell dimension k2 must be less than or equal to complex dimension D");
+
+  std::pair<size_t, size_t> key = std::minmax(k1, k2);
+  ensureHaveIncidences(k1, k2);
+
+  // to find all adjacent k2-cells, we express the input cell as an orbit of dart maps,
+  // and call d.cell<k2>() for each of these darts
+  std::vector<OrderedIncidence<k1, k2, D>> neighbors;
+  std::vector<Dart<D>> seenDarts;
+  neighbors.reserve(8);  // reserve some amount of space
+  seenDarts.reserve(16); // reserve some amount of space
+
+  std::deque<std::pair<Dart<D>, bool>> dartsToVisit;
+  dartsToVisit.push_back(std::make_pair(cell.dart(), true));
+  seenDarts.push_back(cell.dart());
+
+  while (!dartsToVisit.empty()) {
+    // for some reason, iterating in DFS order is important for orienting cells
+    Dart<D> currDart;
+    bool currOrientation;
+    std::tie(currDart, currOrientation) = dartsToVisit.back();
+    dartsToVisit.pop_back();
+
+    Cell<k2, D> currCell = currDart.template cell<k2>();
+    currCell.setOrientation(currCell.orientation() == currOrientation);
+    OrderedIncidence<k1, k2, D> neighbor(this, dIncidenceArr[key][currDart.getIndex()]);
+    if (std::find(neighbors.begin(), neighbors.end(), neighbor) == neighbors.end()) {
+      neighbors.push_back(neighbor);
+    }
+
+    for (std::pair<Dart<D>, bool> n : orbitNeighbors(currDart, k1)) {
+      if (std::find(seenDarts.begin(), seenDarts.end(), n.first) == seenDarts.end()) {
+        dartsToVisit.push_back(std::make_pair(n.first, currOrientation == n.second));
+        seenDarts.push_back(n.first);
+      }
+    }
+  }
+
+  return neighbors;
+}
+
 template <size_t D>
 inline size_t CombinatorialMap<D>::nVertices() const {
   return nCells<0>();
@@ -118,6 +272,26 @@ inline size_t CombinatorialMap<D>::nEdges() const {
 template <size_t D>
 inline size_t CombinatorialMap<D>::nFaces() const {
   return nCells<2>();
+}
+
+template <size_t D>
+inline size_t CombinatorialMap<D>::nCells() const {
+  return nCells<3>();
+}
+
+template <size_t D>
+inline size_t CombinatorialMap<D>::nVertexCorners() const {
+  return nIncidences<0, D>();
+}
+
+template <size_t D>
+inline size_t CombinatorialMap<D>::nEdgeCorners() const {
+  return nIncidences<1, D>();
+}
+
+template <size_t D>
+inline size_t CombinatorialMap<D>::nFaceCorners() const {
+  return nIncidences<0, 2>();
 }
 
 // Capacities
@@ -145,12 +319,26 @@ inline size_t CombinatorialMap<D>::nCellsCapacity() const {
   return nCellsCapacityCount[k];
 }
 
+template <size_t D>
+template <size_t k1, size_t k2>
+inline size_t CombinatorialMap<D>::nIncidencesCapacity() const {
+  auto it = nIncidencesCapacityCount.find(std::make_pair(k1, k2));
+  return it == nIncidencesCapacityCount.end() ? 0 : it->second;
+}
+
 // Connectivity
 template <size_t D>
 inline size_t CombinatorialMap<D>::dartPartner(size_t iD, size_t dim) const {
   assert(dim <= D);
   assert(iD < nDarts());
   return dartMap[dim][iD];
+}
+
+template <size_t D>
+inline void CombinatorialMap<D>::ensureHaveIncidences(size_t k1, size_t k2) {
+  if (dIncidenceArr.find(std::make_pair(k1, k2)) == dIncidenceArr.end()) {
+    indexIncidences(k1, k2);
+  }
 }
 
 template <size_t D>
@@ -289,6 +477,26 @@ size_t CombinatorialMap<D>::getNewCellIndex(size_t k) {
   return nCellsFillCount[k] - 1;
 }
 
+template <size_t D>
+size_t CombinatorialMap<D>::getNewIncidenceIndex(std::pair<size_t, size_t> k1k2) {
+  if (nIncidencesFillCount[k1k2] < nIncidencesCapacityCount[k1k2]) { // The boring case, when no resize is needed
+  } else {                                                           // The intesting case, where vectors resize
+    size_t newIncidenceCapacity = std::max(nIncidencesCapacityCount[k1k2] * 2, (size_t)1);
+
+    // Resize internal arrays
+    iDartArr[k1k2].resize(newIncidenceCapacity);
+    nIncidencesCapacityCount[k1k2] = newIncidenceCapacity;
+
+    // Invoke relevant callback functions
+    for (auto& f : incidenceExpandCallbackList[k1k2]) f(newIncidenceCapacity);
+  }
+
+  nIncidencesFillCount[k1k2]++;
+  nIncidencesCount[k1k2]++;
+
+  modificationTick++;
+  return nIncidencesFillCount[k1k2] - 1;
+}
 
 template <size_t D> // ensure we have space for n more k-cells
 void CombinatorialMap<D>::allocateCells(size_t k, size_t n) {
@@ -342,6 +550,15 @@ inline bool CombinatorialMap<D>::cellIsDead(size_t k, size_t iC) const {
 }
 
 template <size_t D>
+template <size_t k1, size_t k2>
+inline bool CombinatorialMap<D>::incidenceIsDead(size_t iI) const {
+  static_assert(k1 < k2, "an incidence must have cell dimensions k1 < k2");
+  static_assert(k2 <= D, "cell dimension k2 must be less than or equal to complex dimension D");
+  auto it = iDartArr.find(std::make_pair(k1, k2));
+  return it == iDartArr.end() || it->second[iI] == INVALID_IND;
+}
+
+template <size_t D>
 inline bool CombinatorialMap<D>::dartIsDead(size_t iD) const {
   return dartMap[0][iD] == INVALID_IND;
 }
@@ -351,6 +568,13 @@ inline bool CombinatorialMap<D>::dartIsDead(size_t iD) const {
 template <size_t D>
 inline DartSet<D> CombinatorialMap<D>::darts() {
   return DartSet<D>(this, 0, nDartsFillCount);
+}
+
+template <size_t D>
+template <size_t k>
+inline CellSet<k, D> CombinatorialMap<D>::cells() {
+  static_assert(k <= D, "cell dimension k must be less than or equal to complex dimension D");
+  return CellSet<k, D>(this, 0, nCellsFillCount[k]);
 }
 
 template <size_t D>
@@ -369,10 +593,32 @@ inline FaceSet<D> CombinatorialMap<D>::faces() {
 }
 
 template <size_t D>
-template <size_t k>
-inline CellSet<k, D> CombinatorialMap<D>::cells() {
-  static_assert(k <= D, "cell dimension k must be less than or equal to complex dimension D");
-  return CellSet<k, D>(this, 0, nCellsFillCount[k]);
+inline CellSet<3, D> CombinatorialMap<D>::cells() {
+  return cells<3>();
+}
+
+template <size_t D>
+template <size_t k1, size_t k2>
+inline IncidenceSet<k1, k2, D> CombinatorialMap<D>::incidences() {
+  static_assert(k1 < k2, "an incidence must have cell dimensions k1 < k2");
+  static_assert(k2 <= D, "cell dimension k2 must be less than or equal to complex dimension D");
+  ensureHaveIncidences(k1, k2);
+  return IncidenceSet<k1, k2, D>(this, 0, nIncidencesFillCount[std::make_pair(k1, k2)]);
+}
+
+template <size_t D>
+inline IncidenceSet<0, D, D> CombinatorialMap<D>::vertexCorners() {
+  return incidences<0, D>();
+}
+
+template <size_t D>
+inline IncidenceSet<1, D, D> CombinatorialMap<D>::edgeCorners() {
+  return incidences<1, D>();
+}
+
+template <size_t D>
+inline IncidenceSet<0, 2, D> CombinatorialMap<D>::faceCorners() {
+  return incidences<0, 2>();
 }
 
 // Methods for accessing elements by index =====================================
@@ -381,6 +627,12 @@ inline CellSet<k, D> CombinatorialMap<D>::cells() {
 template <size_t D>
 inline Dart<D> CombinatorialMap<D>::dart(size_t index) {
   return Dart<D>(this, index);
+}
+
+template <size_t D>
+template <size_t k>
+inline Cell<k, D> CombinatorialMap<D>::cell(size_t index) {
+  return Cell<k, D>(this, index);
 }
 
 template <size_t D>
@@ -399,9 +651,27 @@ inline Face<D> CombinatorialMap<D>::face(size_t index) {
 }
 
 template <size_t D>
-template <size_t k>
-inline Cell<k, D> CombinatorialMap<D>::cell(size_t index) {
-  return Cell<k, D>(this, index);
+inline Cell<3, D> CombinatorialMap<D>::cell(size_t index) {
+  return cell<3>(index);
+}
+
+template <size_t D>
+template <size_t k1, size_t k2>
+inline Incidence<k1, k2, D> CombinatorialMap<D>::incidence(size_t index) {
+  return Incidence<k1, k2, D>(this, index);
+}
+
+template <size_t D>
+inline Incidence<0, D, D> CombinatorialMap<D>::vertexCorner() {
+  return incidence<0, D>(index);
+}
+template <size_t D>
+inline Incidence<1, D, D> CombinatorialMap<D>::edgeCorner() {
+  return incidence<1, D>(index);
+}
+template <size_t D>
+inline Incidence<0, 2, D> CombinatorialMap<D>::faceCorner() {
+  return incidence<0, 2>(index);
 }
 
 template <size_t D>
@@ -431,6 +701,11 @@ FaceData<D, size_t> CombinatorialMap<D>::getFaceIndices() {
 }
 
 template <size_t D>
+CellData<3, D, size_t> CombinatorialMap<D>::getCellIndices() {
+  return getCellIndices<3>();
+}
+
+template <size_t D>
 template <size_t k>
 CellData<k, D, size_t> CombinatorialMap<D>::getCellIndices() {
   static_assert(k <= D, "cell dimension k must be less than or equal to complex dimension D");
@@ -438,6 +713,21 @@ CellData<k, D, size_t> CombinatorialMap<D>::getCellIndices() {
   size_t i = 0;
   for (Cell<k, D> c : cells<k>()) {
     indices[c] = i;
+    i++;
+  }
+  return indices;
+}
+
+template <size_t D>
+template <size_t k1, size_t k2>
+IncidenceData<k1, k2, D, size_t> CombinatorialMap<D>::getIncidenceIndices() {
+  static_assert(k1 < k2, "an incidence must have cell dimensions k1 < k2");
+  static_assert(k2 <= D, "cell dimension k2 must be less than or equal to complex dimension D");
+  ensureHaveIncidences(k1, k2);
+  IncidenceData<k1, k2, D, size_t> indices(*this);
+  size_t i = 0;
+  for (Incidence<k1, k2, D> inc : incidences<k1, k2>()) {
+    indices[inc] = i;
     i++;
   }
   return indices;
@@ -528,6 +818,7 @@ void CombinatorialMap<D>::copyInternalFields(CombinatorialMap<D>& target) const 
 // index k-cells and fill cDartArr[k] and dCellArr[k] based off of dartMap
 template <size_t D>
 void CombinatorialMap<D>::indexCells(size_t k) {
+  using namespace unionfind;
   if (k > D) return;
   // static_assert(k <= D, "cell dimension k must be less than or equal to complex dimension D");
   const bool DEBUG_PRINT = false;
@@ -545,53 +836,9 @@ void CombinatorialMap<D>::indexCells(size_t k) {
   std::vector<size_t> rank(nDarts(), 0); // initialize every dart to rank 0
   std::vector<bool> sharesParentSign(nDarts(), true);
 
-  // find root, and update all nodes in path to point to root, updating their `sharesParentSign` fields as necessary
-  auto findRoot = [&parent, &sharesParentSign](size_t x) -> size_t {
-    // early return if x or its parent is the root, in which case we don't have to update anything
-    if (parent[x] == parent[parent[x]]) return parent[x];
-
-    // otherwise, update all nodes between x and the root to be direct children of the root
-    std::vector<size_t> visitedNodes;
-    while (parent[x] != x) {
-      visitedNodes.push_back(x);
-      x = parent[x];
-    }
-
-    // iterate through in "last in first out" order, updating sharesParentSign
-    // note that for booleans, a==b is the same as a xor b, i.e. sign multiplication
-    bool runningSign = true;
-    for (int iN = visitedNodes.size() - 1; iN >= 0; iN--) {
-      parent[visitedNodes[iN]] = x;
-      sharesParentSign[visitedNodes[iN]] = (sharesParentSign[visitedNodes[iN]] == runningSign);
-      runningSign = sharesParentSign[visitedNodes[iN]];
-    }
-
-    return x;
-  };
-
-  // join together x and y, updating their `sharesParentSign` fields as necessary
-  auto unite = [&parent, &rank, &sharesParentSign, &findRoot](size_t x, size_t y, bool samesign) -> void {
-    size_t rootX = findRoot(x), rootY = findRoot(y);
-    if (rootX == rootY) return;
-
-    // Union by rank
-    // note that for booleans, a==b is the same as a xor b, i.e. sign multiplication
-    if (rank[rootX] < rank[rootY]) {
-      parent[rootX] = rootY;
-      sharesParentSign[rootX] = ((sharesParentSign[x] == sharesParentSign[y]) == samesign);
-    } else if (rank[rootX] > rank[rootY]) {
-      parent[rootY] = rootX;
-      sharesParentSign[rootY] = ((sharesParentSign[x] == sharesParentSign[y]) == samesign);
-    } else {
-      parent[rootY] = rootX;
-      sharesParentSign[rootY] = ((sharesParentSign[x] == sharesParentSign[y]) == samesign);
-      rank[rootX]++;
-    }
-  };
-
   for (Dart<D> d : darts()) {
     for (std::pair<Dart<D>, bool> n : orbitNeighbors(d, k)) {
-      unite(d.getIndex(), n.first.getIndex(), n.second);
+      unite(d.getIndex(), n.first.getIndex(), n.second, parent, sharesParentSign, rank);
       if (DEBUG_PRINT) {
         std::cout << "uniting dart " << d.getIndex() << " with dart " << n.first.getIndex()
                   << " | orientationPreserving: " << (n.second ? "true" : "false") << std::endl;
@@ -602,10 +849,10 @@ void CombinatorialMap<D>::indexCells(size_t k) {
   if (DEBUG_PRINT) {
     std::cout << std::endl << "Final " << k << "-cell orbits: " << std::endl;
     for (size_t iRoot = 0; iRoot < nDarts(); iRoot++) {
-      if (findRoot(iRoot) != iRoot) continue;
+      if (findRoot(iRoot, parent, sharesParentSign) != iRoot) continue;
       std::cout << "  root " << iRoot << std::endl;
       for (size_t iDart = 0; iDart < nDarts(); iDart++) {
-        if (findRoot(iDart) == iRoot) {
+        if (findRoot(iDart, parent, sharesParentSign) == iRoot) {
           std::cout << "     dart " << iDart << " : " << dCellArr[0][iDart] << "->" << dCellArr[0][dartMap[0][iDart]]
                     << "\tpositive orientation: " << (sharesParentSign[iDart] ? "true" : "false") << std::endl;
         }
@@ -621,7 +868,7 @@ void CombinatorialMap<D>::indexCells(size_t k) {
 
   // Assign new k-cell indices
   for (size_t iDart = 0; iDart < nDarts(); iDart++) {
-    size_t iRoot = findRoot(iDart);
+    size_t iRoot = findRoot(iDart, parent, sharesParentSign);
     if (dCellArr[k][iRoot] == INVALID_IND) {
       dCellArr[k][iRoot] = getNewCellIndex(k);
       dCellSgn[k][iRoot] = true;
@@ -634,6 +881,65 @@ void CombinatorialMap<D>::indexCells(size_t k) {
   // Shrink internal arrays
   cDartArr[k].resize(nCellsCount[k]);
   nCellsCapacityCount[k] = nCellsCount[k];
+}
+
+// index k-cells and fill cDartArr[k] and dCellArr[k] based off of dartMap
+template <size_t D>
+void CombinatorialMap<D>::indexIncidences(size_t k1, size_t k2) {
+  using namespace unionfind;
+  if (k1 > D || k2 > D) return;
+  const bool DEBUG_PRINT = false;
+
+  std::vector<size_t> parent;
+  parent.reserve(nDarts()); // initialize every dart as its own parent
+  for (size_t i = 0; i < nDarts(); i++) parent.push_back(i);
+
+  std::vector<size_t> rank(nDarts(), 0); // initialize every dart to rank 0
+  std::vector<bool> sharesParentSign(nDarts(), true);
+
+  for (Dart<D> d : darts()) {
+    for (Dart<D> n : incidenceNeighboringDarts(d, k1, k2)) {
+      unite(d.getIndex(), n.getIndex(), true, parent, sharesParentSign, rank);
+      if (DEBUG_PRINT) {
+        std::cout << "uniting dart " << d.getIndex() << " with dart " << n.getIndex() << std::endl;
+      }
+    }
+  }
+
+  if (DEBUG_PRINT) {
+    std::cout << std::endl << "Final (" << k1 << ", " << k2 << ")-incidence orbits: " << std::endl;
+    for (size_t iRoot = 0; iRoot < nDarts(); iRoot++) {
+      if (findRoot(iRoot, parent, sharesParentSign) != iRoot) continue;
+      std::cout << "  root " << iRoot << std::endl;
+      for (size_t iDart = 0; iDart < nDarts(); iDart++) {
+        if (findRoot(iDart, parent, sharesParentSign) == iRoot) {
+          std::cout << "     dart " << iDart << " : " << dCellArr[0][iDart] << "->" << dCellArr[0][dartMap[0][iDart]]
+                    << std::endl;
+        }
+      }
+      std::cout << std::endl;
+    }
+  }
+
+  // Clear any existing k1,k2-incidences
+  std::pair<size_t, size_t> key = std::make_pair(k1, k2);
+  dIncidenceArr[key] = std::vector<size_t>(nDartsCapacity(), INVALID_IND);
+  nIncidencesFillCount[key] = 0;
+  nIncidencesCount[key] = 0;
+
+  // Assign new incidence indices
+  for (size_t iDart = 0; iDart < nDarts(); iDart++) {
+    size_t iRoot = findRoot(iDart, parent, sharesParentSign);
+    if (dIncidenceArr[key][iRoot] == INVALID_IND) {
+      dIncidenceArr[key][iRoot] = getNewIncidenceIndex(key);
+      iDartArr[key][dIncidenceArr[key][iRoot]] = iRoot;
+    }
+    dIncidenceArr[key][iDart] = dIncidenceArr[key][iRoot];
+  }
+
+  // Shrink internal arrays
+  iDartArr[key].resize(nIncidencesCount[key]);
+  nIncidencesCapacityCount[key] = nIncidencesCount[key];
 }
 
 // computes n! / 2, used as a helper function for simplicial complex constructor
@@ -1074,32 +1380,32 @@ CombinatorialMap<3>::CombinatorialMap(const std::vector<std::vector<std::vector<
 //   }
 // }
 
-// Builds a 2D polygon mesh
-template <>
-CombinatorialMap<2>::CombinatorialMap(const std::vector<std::vector<size_t>>& polygons) {
-  std::map<std::pair<size_t, size_t>, size_t> edgeIndices;
-  size_t nEdges = 0;
+// // Builds a 2D polygon mesh
+// template <>
+// CombinatorialMap<2>::CombinatorialMap(const std::vector<std::vector<size_t>>& polygons) {
+//   std::map<std::pair<size_t, size_t>, size_t> edgeIndices;
+//   size_t nEdges = 0;
 
-  std::array<std::vector<std::vector<std::pair<size_t, bool>>>, 2> boundaryMaps;
+//   std::array<std::vector<std::vector<std::pair<size_t, bool>>>, 2> boundaryMaps;
 
-  for (const std::vector<size_t>& face : polygons) {
-    boundaryMaps[1].push_back(std::vector<std::pair<size_t, bool>>{});
-    for (size_t iE = 0; iE < face.size(); iE++) {
-      size_t vi = face[iE], vj = face[(iE + 1) % face.size()];
-      std::pair<size_t, size_t> key = std::minmax(vi, vj);
-      bool orientation = vi < vj;
-      if (edgeIndices.find(key) == edgeIndices.end()) { // first time seeing this edge, add to boundary map
-        edgeIndices[key] = nEdges;
-        boundaryMaps[0].push_back(
-            std::vector<std::pair<size_t, bool>>{std::make_pair(vj, orientation), std::make_pair(vi, !orientation)});
-        nEdges++;
-      }
-      boundaryMaps[1].back().push_back(std::make_pair(edgeIndices[key], orientation));
-    }
-  }
+//   for (const std::vector<size_t>& face : polygons) {
+//     boundaryMaps[1].push_back(std::vector<std::pair<size_t, bool>>{});
+//     for (size_t iE = 0; iE < face.size(); iE++) {
+//       size_t vi = face[iE], vj = face[(iE + 1) % face.size()];
+//       std::pair<size_t, size_t> key = std::minmax(vi, vj);
+//       bool orientation = vi < vj;
+//       if (edgeIndices.find(key) == edgeIndices.end()) { // first time seeing this edge, add to boundary map
+//         edgeIndices[key] = nEdges;
+//         boundaryMaps[0].push_back(
+//             std::vector<std::pair<size_t, bool>>{std::make_pair(vj, orientation), std::make_pair(vi, !orientation)});
+//         nEdges++;
+//       }
+//       boundaryMaps[1].back().push_back(std::make_pair(edgeIndices[key], orientation));
+//     }
+//   }
 
-  constructFromBoundaryMaps(boundaryMaps);
-}
+//   constructFromBoundaryMaps(boundaryMaps);
+// }
 
 template <size_t D> // Construct a cell complex given as an array of boundary matrices
 // CombinatorialMap<D>::CombinatorialMap(const std::array<SparseMatrix<int>, D>& boundaryMatrices) {
@@ -1109,7 +1415,8 @@ CombinatorialMap<D>::CombinatorialMap(
 }
 
 template <size_t D> // Construct a cell complex given as an array of boundary matrices
-                    // CombinatorialMap<D>::CombinatorialMap(const std::array<SparseMatrix<int>, D>& boundaryMatrices) {
+                    // CombinatorialMap<D>::CombinatorialMap(const std::array<SparseMatrix<int>, D>& boundaryMatrices)
+                    // {
 void CombinatorialMap<D>::constructFromBoundaryMaps(
     const std::array<std::vector<std::vector<std::pair<size_t, bool>>>, D>& boundaryMaps) {
   const bool DEBUG_PRINT = false;
@@ -1152,11 +1459,10 @@ void CombinatorialMap<D>::constructFromBoundaryMaps(
 
   // allocateDarts(nCellDarts);
 
-  // Represent darts as oriented flags. The dart {(i, oi), (j, oj), (k, ok), ...} corresponds to the flag consisting of
-  // edge i with orientation oi, face j with orientation oj, 3-cell k with orientation ok, etc.
-  // Since we store the orientation explicitly, we do not store the 0-dimensional vertex of the flag, which is uniquely
-  // determined by the edge + orientation
-  // cellDarts[k][i] lists the darts making up k-cell i.
+  // Represent darts as oriented flags. The dart {(i, oi), (j, oj), (k, ok), ...} corresponds to the flag consisting
+  // of edge i with orientation oi, face j with orientation oj, 3-cell k with orientation ok, etc. Since we store the
+  // orientation explicitly, we do not store the 0-dimensional vertex of the flag, which is uniquely determined by the
+  // edge + orientation cellDarts[k][i] lists the darts making up k-cell i.
   std::array<std::vector<std::vector<std::pair<size_t, bool>>>, D + 1> cellDarts;
 
   // fill in edge darts directly
@@ -1391,6 +1697,7 @@ struct OrbitNeighborhoodIterator {
   }
 };
 
+
 template <size_t D>
 class OrbitNeighborhood {
 public:
@@ -1406,6 +1713,90 @@ private:
   Dart<D> dStart;
   OrbitNeighborhoodIterator<D> cachedEnd;
 };
+
+
+// k-cells are orbits generated by compositions of dart maps
+// 0-cells are generated by <map[0].map[1], map[0].map[2], ..., map[D-2].map[D-1]>
+// 1-cells are generated by <map[1], ..., map[D-1]>
+// 2-cells are generated by <map[0], map[2], ..., map[D-1]>
+// see e.g. https://doc.cgal.org/latest/Combinatorial_map/index.html#title3
+// so incidences are intersections of these orbits. Use union-find to index these orbit intersections
+
+template <size_t D>
+std::vector<Dart<D>> incidenceNeighboringDarts(Dart<D> d, size_t k1, size_t k2, bool verbose) {
+  std::vector<Dart<D>> result;
+
+  if (k1 == 0) { // k1 = 0, k2 > 0. Take 0-cell compositions, skipping k2-1
+    for (size_t iMap = 1; iMap < D; ++iMap) {
+      if (iMap + 1 == k2) continue;
+      for (size_t jMap = 0; jMap < iMap; ++jMap) {
+        if (jMap + 1 == k2) continue;
+        Dart<D> iPartner = d.partner(iMap);
+        if (iPartner == d) continue; // skip (INVALID_IND)
+        Dart<D> next = iPartner.partner(jMap);
+        if (next == iPartner) continue; // skip (INVALID_IND)
+        result.push_back(next);
+      }
+    }
+  } else { // k1 > 0, k2 > 0: skip maps k1 - 1, k2 - 1
+    for (size_t iMap = 0; iMap < D; ++iMap) {
+      if (iMap + 1 != k1 && iMap + 1 != k2) { // iMap != k-1
+        Dart<D> next = d.partner(iMap);
+        if (next == d) continue; // skip (INVALID_IND)
+        result.push_back(next);
+      }
+    }
+  }
+  return result;
+}
+
+namespace unionfind {
+// find root, and update all nodes in path to point to root, updating their `sharesParentSign` fields as necessary
+inline size_t findRoot(size_t x, std::vector<size_t>& parent, std::vector<bool>& sharesParentSign) {
+  // early return if x or its parent is the root, in which case we don't have to update anything
+  if (parent[x] == parent[parent[x]]) return parent[x];
+
+  // otherwise, update all nodes between x and the root to be direct children of the root
+  std::vector<size_t> visitedNodes;
+  while (parent[x] != x) {
+    visitedNodes.push_back(x);
+    x = parent[x];
+  }
+
+  // iterate through in "last in first out" order, updating sharesParentSign
+  // note that for booleans, a==b is the same as a xor b, i.e. sign multiplication
+  bool runningSign = true;
+  for (int iN = visitedNodes.size() - 1; iN >= 0; iN--) {
+    parent[visitedNodes[iN]] = x;
+    sharesParentSign[visitedNodes[iN]] = (sharesParentSign[visitedNodes[iN]] == runningSign);
+    runningSign = sharesParentSign[visitedNodes[iN]];
+  }
+
+  return x;
+}
+
+// join together x and y, updating their `sharesParentSign` fields as necessary
+inline void unite(size_t x, size_t y, bool samesign, std::vector<size_t>& parent, std::vector<bool>& sharesParentSign,
+                  std::vector<size_t>& rank) {
+  size_t rootX = findRoot(x, parent, sharesParentSign), rootY = findRoot(y, parent, sharesParentSign);
+  if (rootX == rootY) return;
+
+  // Union by rank
+  // note that for booleans, a==b is the same as a xor b, i.e. sign multiplication
+  if (rank[rootX] < rank[rootY]) {
+    parent[rootX] = rootY;
+    sharesParentSign[rootX] = ((sharesParentSign[x] == sharesParentSign[y]) == samesign);
+  } else if (rank[rootX] > rank[rootY]) {
+    parent[rootY] = rootX;
+    sharesParentSign[rootY] = ((sharesParentSign[x] == sharesParentSign[y]) == samesign);
+  } else {
+    parent[rootY] = rootX;
+    sharesParentSign[rootY] = ((sharesParentSign[x] == sharesParentSign[y]) == samesign);
+    rank[rootX]++;
+  }
+}
+
+} // namespace unionfind
 
 } // namespace combinatorial_map
 } // namespace geometrycentral
