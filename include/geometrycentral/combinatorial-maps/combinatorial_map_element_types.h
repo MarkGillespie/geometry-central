@@ -134,7 +134,7 @@ public:
   std::vector<Incidence<0, 2, D>> adjacentFaceCorners() const;   // (0, 2)-incidences
 
   bool isDead() const;
-  bool isBoundary() const;
+  bool isBoundary() const; // returns true if the cell is totally contained in the mesh boundary
 
   bool orientation() const;
   void flipOrientation();

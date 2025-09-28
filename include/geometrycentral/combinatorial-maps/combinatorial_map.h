@@ -184,6 +184,7 @@ public:
   std::vector<std::vector<size_t>> getCellVertexList();
 
   std::unique_ptr<CombinatorialMap> copy() const;
+  std::unique_ptr<CombinatorialMap<D>> dual() const;
   // std::unique_ptr<ManifoldCombinatorialMap> toManifoldMesh();
 
   // Compress the mesh
@@ -251,7 +252,8 @@ public:
   // == Debugging, etc
 
   // Performs a sanity checks on dart structure; throws on fail
-  void validateConnectivity();
+  // If allowDeadDarts is false, also throws if any darts are dead
+  void validateConnectivity(bool allowDeadDarts = false);
 
   // index k-cells and fill cDartArr[k] and dCellArr[k] based off of dartMap
   void indexCells(size_t k);
