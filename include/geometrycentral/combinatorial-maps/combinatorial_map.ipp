@@ -107,7 +107,8 @@ std::vector<Cell<k2, D>> CombinatorialMap<D>::adjacentCells(Cell<k1, D> cell) co
     dartsToVisit.pop_back();
 
     Cell<k2, D> currCell = currDart.template cell<k2>();
-    currCell.setOrientation(currCell.orientation() == currOrientation);
+    // TODO FIXME do we need this orientation stuff anymore?
+    // currCell.setOrientation(currCell.orientation() == currOrientation);
     if (std::find(neighbors.begin(), neighbors.end(), currCell) == neighbors.end()) {
       neighbors.push_back(currCell);
     }
