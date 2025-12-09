@@ -191,21 +191,21 @@ template <size_t k, size_t D>
 std::vector<Incidence<0, D, D>> Cell<k, D>::adjacentVertexCorners() const {
   static_assert(k == 0 || k == D,
                 "adjacentVertexCorners() is only defined for 0-cells and D-cells on a D-dimensional cell complex");
-  return adjacentIncidences < k == 0 ? D : 0 > ();
+  return adjacentIncidences<k == 0 ? D : 0>();
 }
 
 template <size_t k, size_t D>
 std::vector<Incidence<1, D, D>> Cell<k, D>::adjacentEdgeCorners() const {
   static_assert(k == 1 || k == D,
                 "adjacentEdgeCorners() is only defined for 1-cells and D-cells on a D-dimensional cell complex");
-  return adjacentIncidences < k == 1 ? D : 1 > ();
+  return adjacentIncidences<k == 1 ? D : 1>();
 }
 
 template <size_t k, size_t D>
 std::vector<Incidence<0, 2, D>> Cell<k, D>::adjacentFaceCorners() const {
   static_assert(k == 0 || k == 2,
                 "adjacentFaceCorners() is only defined for 0-cells and 2-cells on a D-dimensional cell complex");
-  return adjacentIncidences < k == 0 ? 2 : 0 > ();
+  return adjacentIncidences<k == 0 ? 2 : 0>();
 }
 
 template <size_t k, size_t D>
@@ -248,15 +248,17 @@ inline int Cell<k, D>::sign() const {
 template <size_t k, size_t D>
 inline bool Cell<k, D>::orientationInCell(Cell<k + 1, D> c) const {
   static_assert(k + 1 <= D, "cannot construct a (D+1)-cell");
-  // get the orientation of this->dart() inside of cell c, and then flip if this cell is negatively oriented
-  return this->mesh->dCellSgn[k + 1][dart().getIndex()] && orientation();
+  // get the orientation of this->dart() inside of cell c, and then flip if cells are oppositely oriented
+  // (note that == on bools is XOR)
+  return this->mesh->dCellSgn[k + 1][dart().getIndex()] == (c.orientation() == orientation());
 }
 
 template <size_t k, size_t D>
 inline bool Cell<k, D>::orientationInCell(Cell<k - 1, D> c) const {
   static_assert(k > 0, "cannot construct a (-1)-cell");
-  // get the orientation of this->dart() inside of cell c, and then flip if this cell is negatively oriented
-  return this->mesh->dCellSgn[k - 1][dart().getIndex()] && orientation();
+  // get the orientation of c.dart() in this cell, and then flip if cells are oppositely oriented
+  // (note that == on bools is XOR)
+  return this->mesh->dCellSgn[k][c.dart().getIndex()] == (c.orientation() == orientation());
 }
 
 template <size_t k, size_t D>

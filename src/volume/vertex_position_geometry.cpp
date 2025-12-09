@@ -20,6 +20,8 @@ VertexPositionGeometry::VertexPositionGeometry(ManifoldVolumeMesh& mesh_)
   faceAreasQ               (&faceAreas,              std::bind(&VertexPositionGeometry::computeFaceAreas, this),              quantities),
   cellVolumesQ             (&cellVolumes,            std::bind(&VertexPositionGeometry::computeCellVolumes, this),            quantities),
   vertexDualVolumesQ       (&vertexDualVolumes,      std::bind(&VertexPositionGeometry::computeVertexDualVolumes, this),      quantities),
+  faceDualEdgeLengthsQ     (&faceDualEdgeLengths,    std::bind(&VertexPositionGeometry::computeFaceDualEdgeLengths, this),    quantities),
+  faceHodge2Q              (&faceHodge2,             std::bind(&VertexPositionGeometry::computeFaceHodge2, this),             quantities),
   faceCornerAnglesQ        (&faceCornerAngles,       std::bind(&VertexPositionGeometry::computeFaceCornerAngles, this),       quantities),
   faceCornerAngleCotansQ   (&faceCornerAngleCotans,  std::bind(&VertexPositionGeometry::computeFaceCornerAngleCotans, this),  quantities),
   dihedralAnglesQ          (&dihedralAngles,         std::bind(&VertexPositionGeometry::computeDihedralAngles, this),         quantities),
@@ -195,6 +197,30 @@ void VertexPositionGeometry::computeVertexDualVolumes() {
 }
 void VertexPositionGeometry::requireVertexDualVolumes() { vertexDualVolumesQ.require(); }
 void VertexPositionGeometry::unrequireVertexDualVolumes() { vertexDualVolumesQ.unrequire(); }
+
+void VertexPositionGeometry::computeFaceDualEdgeLengths() {
+  cellCircumcentersQ.ensureHave();
+  faceNormalsQ.ensureHave();
+
+  faceDualEdgeLengths = FaceData<double>(mesh, 0.);
+
+  for (Face f : mesh.faces()) {
+    faceDualEdgeLengths[f] =
+        dot(faceNormals[f], cellCircumcenters[f.dart().cell()] - cellCircumcenters[f.dart().partner(2).cell()]);
+  }
+}
+void VertexPositionGeometry::requireFaceDualEdgeLengths() { faceDualEdgeLengthsQ.require(); }
+void VertexPositionGeometry::unrequireFaceDualEdgeLengths() { faceDualEdgeLengthsQ.unrequire(); }
+
+void VertexPositionGeometry::computeFaceHodge2() {
+  faceAreasQ.ensureHave();
+  faceDualEdgeLengthsQ.ensureHave();
+
+  faceHodge2 = FaceData<double>(mesh, 0.);
+  for (Face f : mesh.faces()) faceHodge2[f] = faceDualEdgeLengths[f] / faceAreas[f];
+}
+void VertexPositionGeometry::requireFaceHodge2() { faceHodge2Q.require(); }
+void VertexPositionGeometry::unrequireFaceHodge2() { faceHodge2Q.unrequire(); }
 
 void VertexPositionGeometry::computeFaceCornerAngles() {
   faceCornerAngles = FaceCornerData<double>(mesh);

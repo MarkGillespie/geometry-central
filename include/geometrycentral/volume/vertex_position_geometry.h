@@ -109,6 +109,14 @@ public:
   void requireVertexDualVolumes();
   void unrequireVertexDualVolumes();
 
+  FaceData<double> faceDualEdgeLengths;
+  void requireFaceDualEdgeLengths();
+  void unrequireFaceDualEdgeLengths();
+
+  FaceData<double> faceHodge2;
+  void requireFaceHodge2();
+  void unrequireFaceHodge2();
+
   FaceCornerData<double> faceCornerAngles;
   void requireFaceCornerAngles();
   void unrequireFaceCornerAngles();
@@ -202,6 +210,12 @@ protected:
 
   DependentQuantityD<VertexData<double>> vertexDualVolumesQ;
   void computeVertexDualVolumes();
+
+  DependentQuantityD<FaceData<double>> faceDualEdgeLengthsQ;
+  void computeFaceDualEdgeLengths();
+
+  DependentQuantityD<FaceData<double>> faceHodge2Q;
+  void computeFaceHodge2();
 
   DependentQuantityD<FaceCornerData<double>> faceCornerAnglesQ;
   void computeFaceCornerAngles();
