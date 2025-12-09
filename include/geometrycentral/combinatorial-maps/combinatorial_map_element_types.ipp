@@ -38,6 +38,14 @@ template <size_t D>
 inline Dart<D>::Dart(CombinatorialMap<D>* mesh_, size_t ind_) : Element<Dart<D>, CombinatorialMap<D>>(mesh_, ind_) {}
 
 // Navigators
+
+template <size_t D>
+template <size_t iPartner>
+inline Dart<D> Dart<D>::partner() const {
+  size_t partnerInd = this->mesh->dartPartner(this->ind, iPartner);
+  return (partnerInd == INVALID_IND) ? *this : Dart<D>(this->mesh, partnerInd);
+}
+
 template <size_t D>
 inline Dart<D> Dart<D>::partner(size_t d) const {
   size_t partnerInd = this->mesh->dartPartner(this->ind, d);
@@ -250,15 +258,25 @@ inline bool Cell<k, D>::orientationInCell(Cell<k + 1, D> c) const {
   static_assert(k + 1 <= D, "cannot construct a (D+1)-cell");
   // get the orientation of this->dart() inside of cell c, and then flip if cells are oppositely oriented
   // (note that == on bools is XOR)
-  return this->mesh->dCellSgn[k + 1][dart().getIndex()] == (c.orientation() == orientation());
+  // bool inCell = dart().template cell<k + 1>() == c;
+  // Dart<D> d = inCell ? dart() : dart().template partner<k + 1>();
+  // return (this->mesh->dCellSgn[k + 1][d.getIndex()] == inCell) == (c.orientation() == orientation());
+
+  // TODO: this is inefficient, but at least it should work. Ignores orientations of this and c
+  Cell<k, D> kCell(this->mesh, this->ind);
+  for (Cell<k + 1, D> biggerCell : kCell.adjacentCells<k + 1>()) {
+    if (biggerCell.getIndex() == c.getIndex()) {
+      return biggerCell.orientation();
+    }
+  }
+
+  return true;
 }
 
 template <size_t k, size_t D>
 inline bool Cell<k, D>::orientationInCell(Cell<k - 1, D> c) const {
   static_assert(k > 0, "cannot construct a (-1)-cell");
-  // get the orientation of c.dart() in this cell, and then flip if cells are oppositely oriented
-  // (note that == on bools is XOR)
-  return this->mesh->dCellSgn[k][c.dart().getIndex()] == (c.orientation() == orientation());
+  return c.orientationInCell(*this);
 }
 
 template <size_t k, size_t D>

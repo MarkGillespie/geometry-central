@@ -78,6 +78,9 @@ public:
   Incidence<1, D, D> edgeCorner() const;   // (1, D)-incidence
   Incidence<0, 2, D> faceCorner() const;   // (0, 2)-incidence
 
+  template <size_t iPartner>
+  Dart<D> partner() const;
+
   Dart<D> partner(size_t d) const;
   Dart<D> next() const;
 
