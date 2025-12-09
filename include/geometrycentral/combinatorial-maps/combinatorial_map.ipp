@@ -96,7 +96,7 @@ std::vector<Cell<k2, D>> CombinatorialMap<D>::adjacentCells(Cell<k1, D> cell) co
   seenDarts.reserve(16); // reserve some amount of space
 
   std::deque<std::pair<Dart<D>, bool>> dartsToVisit;
-  dartsToVisit.push_back(std::make_pair(cell.dart(), true));
+  dartsToVisit.push_back(std::make_pair(cell.dart(), cell.orientation()));
   seenDarts.push_back(cell.dart());
 
   while (!dartsToVisit.empty()) {
@@ -107,8 +107,7 @@ std::vector<Cell<k2, D>> CombinatorialMap<D>::adjacentCells(Cell<k1, D> cell) co
     dartsToVisit.pop_back();
 
     Cell<k2, D> currCell = currDart.template cell<k2>();
-    // TODO FIXME do we need this orientation stuff anymore?
-    // currCell.setOrientation(currCell.orientation() == currOrientation);
+    currCell.setOrientation(currCell.orientation() == currOrientation);
     if (std::find(neighbors.begin(), neighbors.end(), currCell) == neighbors.end()) {
       neighbors.push_back(currCell);
     }
