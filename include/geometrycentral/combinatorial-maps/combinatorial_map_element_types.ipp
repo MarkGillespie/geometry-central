@@ -394,6 +394,14 @@ inline bool IncidenceRangeF<k1, k2, D>::elementOkay(const CombinatorialMap<D>& m
 
 
 template <>
+struct ElementSetType<combinatorial_map::Dart<2>> {
+  typedef combinatorial_map::DartSet<2> type;
+};
+template <>
+struct ElementSetType<combinatorial_map::Dart<3>> {
+  typedef combinatorial_map::DartSet<3> type;
+};
+template <>
 struct ElementSetType<combinatorial_map::Vertex<2>> {
   typedef combinatorial_map::VertexSet<2> type;
 };
@@ -402,12 +410,24 @@ struct ElementSetType<combinatorial_map::Vertex<3>> {
   typedef combinatorial_map::VertexSet<3> type;
 };
 template <>
-struct ElementSetType<combinatorial_map::Dart<2>> {
-  typedef combinatorial_map::DartSet<2> type;
+struct ElementSetType<combinatorial_map::Edge<2>> {
+  typedef combinatorial_map::EdgeSet<2> type;
 };
 template <>
-struct ElementSetType<combinatorial_map::Dart<3>> {
-  typedef combinatorial_map::DartSet<3> type;
+struct ElementSetType<combinatorial_map::Edge<3>> {
+  typedef combinatorial_map::EdgeSet<3> type;
+};
+template <>
+struct ElementSetType<combinatorial_map::Face<2>> {
+  typedef combinatorial_map::FaceSet<2> type;
+};
+template <>
+struct ElementSetType<combinatorial_map::Face<3>> {
+  typedef combinatorial_map::FaceSet<3> type;
+};
+template <>
+struct ElementSetType<combinatorial_map::Cell<3, 3>> {
+  typedef combinatorial_map::CellSet<3, 3> type;
 };
 
 template <>
@@ -668,6 +688,16 @@ inline size_t dataIndexOfElement<combinatorial_map::Incidence<2, 3, 3>>(combinat
 
 
 template <>
+inline combinatorial_map::DartSet<2>
+iterateElements<combinatorial_map::Dart<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
+  return mesh->darts();
+}
+template <>
+inline combinatorial_map::DartSet<3>
+iterateElements<combinatorial_map::Dart<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
+  return mesh->darts();
+}
+template <>
 inline combinatorial_map::VertexSet<2>
 iterateElements<combinatorial_map::Vertex<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
   return mesh->vertices();
@@ -678,14 +708,29 @@ iterateElements<combinatorial_map::Vertex<3>>(combinatorial_map::CombinatorialMa
   return mesh->vertices();
 }
 template <>
-inline combinatorial_map::DartSet<2>
-iterateElements<combinatorial_map::Dart<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->darts();
+inline combinatorial_map::EdgeSet<2>
+iterateElements<combinatorial_map::Edge<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
+  return mesh->edges();
 }
 template <>
-inline combinatorial_map::DartSet<3>
-iterateElements<combinatorial_map::Dart<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->darts();
+inline combinatorial_map::EdgeSet<3>
+iterateElements<combinatorial_map::Edge<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
+  return mesh->edges();
+}
+template <>
+inline combinatorial_map::FaceSet<2>
+iterateElements<combinatorial_map::Face<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
+  return mesh->faces();
+}
+template <>
+inline combinatorial_map::FaceSet<3>
+iterateElements<combinatorial_map::Face<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
+  return mesh->faces();
+}
+template <>
+inline combinatorial_map::CellSet<3, 3>
+iterateElements<combinatorial_map::Cell<3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
+  return mesh->cells<3>();
 }
 
 template <>

@@ -89,9 +89,17 @@ public:
   // == Geometry
   VertexData<Vector3> vertexPositions;
 
+  FaceData<Vector3> faceAreaNormals;
+  void requireFaceAreaNormals();
+  void unrequireFaceAreaNormals();
+
   FaceData<Vector3> faceNormals;
   void requireFaceNormals();
   void unrequireFaceNormals();
+
+  EdgeData<Vector3> edgeVectors;
+  void requireEdgeVectors();
+  void unrequireEdgeVectors();
 
   EdgeData<double> edgeLengths;
   void requireEdgeLengths();
@@ -196,8 +204,14 @@ protected:
   void computeFaceCornerIndices();
 
   // == Geometry
+  DependentQuantityD<FaceData<Vector3>> faceAreaNormalsQ;
+  void computeFaceAreaNormals();
+
   DependentQuantityD<FaceData<Vector3>> faceNormalsQ;
   void computeFaceNormals();
+
+  DependentQuantityD<EdgeData<Vector3>> edgeVectorsQ;
+  void computeEdgeVectors();
 
   DependentQuantityD<EdgeData<double>> edgeLengthsQ;
   void computeEdgeLengths();

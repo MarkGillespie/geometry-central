@@ -15,7 +15,9 @@ VertexPositionGeometry::VertexPositionGeometry(ManifoldVolumeMesh& mesh_)
   vertexCornerIndicesQ     (&vertexCornerIndices,    std::bind(&VertexPositionGeometry::computeVertexCornerIndices, this),    quantities),
   edgeCornerIndicesQ       (&edgeCornerIndices,      std::bind(&VertexPositionGeometry::computeEdgeCornerIndices, this),      quantities),
   faceCornerIndicesQ       (&faceCornerIndices,      std::bind(&VertexPositionGeometry::computeFaceCornerIndices, this),      quantities),
+  faceAreaNormalsQ         (&faceAreaNormals,        std::bind(&VertexPositionGeometry::computeFaceAreaNormals, this),        quantities),
   faceNormalsQ             (&faceNormals,            std::bind(&VertexPositionGeometry::computeFaceNormals, this),            quantities),
+  edgeVectorsQ             (&edgeVectors,            std::bind(&VertexPositionGeometry::computeEdgeVectors, this),            quantities),
   edgeLengthsQ             (&edgeLengths,            std::bind(&VertexPositionGeometry::computeEdgeLengths, this),            quantities),
   faceAreasQ               (&faceAreas,              std::bind(&VertexPositionGeometry::computeFaceAreas, this),              quantities),
   cellVolumesQ             (&cellVolumes,            std::bind(&VertexPositionGeometry::computeCellVolumes, this),            quantities),
@@ -104,56 +106,69 @@ void VertexPositionGeometry::requireFaceCornerIndices() { faceCornerIndicesQ.req
 void VertexPositionGeometry::unrequireFaceCornerIndices() { faceCornerIndicesQ.unrequire(); }
 
 // == Geometry
-void VertexPositionGeometry::computeFaceNormals() {
-  faceNormals = FaceData<Vector3>(mesh);
+void VertexPositionGeometry::computeFaceAreaNormals() {
+  faceAreaNormals = FaceData<Vector3>(mesh, Vector3::zero());
 
   for (Face f : mesh.faces()) {
+    Dart heF = f.dart();
+    if (heF.next().next().next() == heF) { // special case for triangles
+      Vector3 pi = vertexPositions[heF.vertex()];
+      Vector3 pj = vertexPositions[heF.next().vertex()];
+      Vector3 pk = vertexPositions[heF.next().next().vertex()];
+      faceAreaNormals[f] = cross(pj - pi, pk - pi) / 2.;
+    } else { // otherwise compute vector area as \sum_{ij} pi x pj
+      do {
+        // Gather vertex positions for next three vertices
+        Dart he = heF;
+        Vector3 pi = vertexPositions[heF.vertex()];
+        Vector3 pj = vertexPositions[heF.next().vertex()];
 
-    // Gather vertex positions for next three vertices
-    Dart he = f.dart();
-    Vector3 pA = vertexPositions[he.vertex()];
-    he = he.next();
-    Vector3 pB = vertexPositions[he.vertex()];
-    he = he.next();
-    Vector3 pC = vertexPositions[he.vertex()];
-
-    GC_SAFETY_ASSERT(he.next() == f.dart(), "faces must be triangular");
-
-    faceNormals[f] = unit(cross(pB - pA, pC - pA));
+        faceAreaNormals[f] += cross(pi, pj);
+        heF = heF.next();
+      } while (heF != f.dart());
+      faceAreaNormals[f] /= 2.;
+    }
   }
+}
+void VertexPositionGeometry::requireFaceAreaNormals() { faceAreaNormalsQ.require(); }
+void VertexPositionGeometry::unrequireFaceAreaNormals() { faceAreaNormalsQ.unrequire(); }
+
+void VertexPositionGeometry::computeFaceNormals() {
+  faceAreaNormalsQ.ensureHave();
+  faceNormals = FaceData<Vector3>(mesh);
+  for (Face f : mesh.faces()) faceNormals[f] = unit(faceAreaNormals[f]);
 }
 void VertexPositionGeometry::requireFaceNormals() { faceNormalsQ.require(); }
 void VertexPositionGeometry::unrequireFaceNormals() { faceNormalsQ.unrequire(); }
+
+void VertexPositionGeometry::computeEdgeVectors() {
+  edgeVectors = EdgeData<Vector3>(mesh);
+  for (Edge e : mesh.edges()) {
+    Dart he = e.dart();
+    Vector3 pi = vertexPositions[he.vertex()];
+    Vector3 pj = vertexPositions[he.next().vertex()];
+    edgeVectors[e] = pj - pi;
+  }
+}
+void VertexPositionGeometry::requireEdgeVectors() { edgeVectorsQ.require(); }
+void VertexPositionGeometry::unrequireEdgeVectors() { edgeVectorsQ.unrequire(); }
 
 void VertexPositionGeometry::computeEdgeLengths() {
   edgeLengths = EdgeData<double>(mesh);
   for (Edge e : mesh.edges()) {
     Dart he = e.dart();
-    Vector3 pA = vertexPositions[he.vertex()];
-    Vector3 pB = vertexPositions[he.next().vertex()];
-    edgeLengths[e] = (pB - pA).norm();
+    Vector3 pi = vertexPositions[he.vertex()];
+    Vector3 pj = vertexPositions[he.next().vertex()];
+    edgeLengths[e] = (pj - pi).norm();
   }
 }
 void VertexPositionGeometry::requireEdgeLengths() { edgeLengthsQ.require(); }
 void VertexPositionGeometry::unrequireEdgeLengths() { edgeLengthsQ.unrequire(); }
 
 void VertexPositionGeometry::computeFaceAreas() {
+  faceAreaNormalsQ.ensureHave();
   faceAreas = FaceData<double>(mesh);
-  for (Face f : mesh.faces()) {
-    // Gather vertex positions for next three vertices
-    Dart he = f.dart();
-    Vector3 pA = vertexPositions[he.vertex()];
-    he = he.next();
-    Vector3 pB = vertexPositions[he.vertex()];
-    he = he.next();
-    Vector3 pC = vertexPositions[he.vertex()];
-
-    GC_SAFETY_ASSERT(he.next() == f.dart(), "faces must be triangular");
-
-    Vector3 N = cross(pB - pA, pC - pA);
-    double area = 0.5 * norm(N);
-    faceAreas[f] = area;
-  }
+  for (Face f : mesh.faces()) faceAreas[f] = faceAreaNormals[f].norm();
 }
 void VertexPositionGeometry::requireFaceAreas() { faceAreasQ.require(); }
 void VertexPositionGeometry::unrequireFaceAreas() { faceAreasQ.unrequire(); }
