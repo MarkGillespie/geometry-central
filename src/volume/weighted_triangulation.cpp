@@ -103,8 +103,8 @@ double weightedCellDist(VertexPositionGeometry& geom, const VertexData<double>& 
     geom.requireCellVolumes();
     double volume = geom.cellVolumes[c];
     for (Vertex i : c.adjacentVertices()) {
-      Dart d = i.dartInCell(c);
-      Face oppFace = d.next().partner(1).face(); // opposite face
+      Dart di = i.dartInCell(c);
+      Face oppFace = di.next().partner(1).face(); // opposite face
       Vector3 n = geom.faceNormals[oppFace] * oppFace.signInCell(c);
       double area = geom.faceAreas[oppFace];
 

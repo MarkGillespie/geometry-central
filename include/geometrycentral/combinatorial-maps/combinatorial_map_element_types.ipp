@@ -256,21 +256,10 @@ inline int Cell<k, D>::sign() const {
 template <size_t k, size_t D>
 inline bool Cell<k, D>::orientationInCell(Cell<k + 1, D> c) const {
   static_assert(k + 1 <= D, "cannot construct a (D+1)-cell");
-  // get the orientation of this->dart() inside of cell c, and then flip if cells are oppositely oriented
+  // get the orientation of shared dart, and then flip if cells are oppositely oriented
   // (note that == on bools is XOR)
-  // bool inCell = dart().template cell<k + 1>() == c;
-  // Dart<D> d = inCell ? dart() : dart().template partner<k + 1>();
-  // return (this->mesh->dCellSgn[k + 1][d.getIndex()] == inCell) == (c.orientation() == orientation());
-
-  // TODO: this is inefficient, but at least it should work. Ignores orientations of this and c
-  Cell<k, D> kCell(this->mesh, this->ind);
-  for (Cell<k + 1, D> biggerCell : kCell.adjacentCells<k + 1>()) {
-    if (biggerCell.getIndex() == c.getIndex()) {
-      return biggerCell.orientation();
-    }
-  }
-
-  return true;
+  size_t iDart = this->mesh->adjacentDartInCell(*this, c).getIndex();
+  return (this->mesh->dCellSgn[k + 1][iDart] == this->mesh->dCellSgn[k][iDart]) == (c.orientation() == orientation());
 }
 
 template <size_t k, size_t D>
@@ -598,91 +587,109 @@ inline size_t elementCapacity<combinatorial_map::Incidence<2, 3, 3>>(combinatori
 template <>
 inline size_t dataIndexOfElement<combinatorial_map::Vertex<2>>(combinatorial_map::CombinatorialMap<2>* mesh,
                                                                combinatorial_map::Vertex<2> e) {
+  (void)mesh; // tell compiler not to complain that mesh is unused
   return e.getIndex();
 }
 template <>
 inline size_t dataIndexOfElement<combinatorial_map::Vertex<3>>(combinatorial_map::CombinatorialMap<3>* mesh,
                                                                combinatorial_map::Vertex<3> e) {
+  (void)mesh; // tell compiler not to complain that mesh is unused
   return e.getIndex();
 }
 template <>
 inline size_t dataIndexOfElement<combinatorial_map::Edge<2>>(combinatorial_map::CombinatorialMap<2>* mesh,
                                                              combinatorial_map::Edge<2> e) {
+  (void)mesh; // tell compiler not to complain that mesh is unused
   return e.getIndex();
 }
 template <>
 inline size_t dataIndexOfElement<combinatorial_map::Edge<3>>(combinatorial_map::CombinatorialMap<3>* mesh,
                                                              combinatorial_map::Edge<3> e) {
+  (void)mesh; // tell compiler not to complain that mesh is unused
   return e.getIndex();
 }
 template <>
 inline size_t dataIndexOfElement<combinatorial_map::Face<2>>(combinatorial_map::CombinatorialMap<2>* mesh,
                                                              combinatorial_map::Face<2> e) {
+  (void)mesh; // tell compiler not to complain that mesh is unused
   return e.getIndex();
 }
 template <>
 inline size_t dataIndexOfElement<combinatorial_map::Face<3>>(combinatorial_map::CombinatorialMap<3>* mesh,
                                                              combinatorial_map::Face<3> e) {
+  (void)mesh; // tell compiler not to complain that mesh is unused
   return e.getIndex();
 }
 template <>
 inline size_t dataIndexOfElement<combinatorial_map::Cell<3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh,
                                                                 combinatorial_map::Cell<3, 3> e) {
+  (void)mesh; // tell compiler not to complain that mesh is unused
   return e.getIndex();
 }
 template <>
 inline size_t dataIndexOfElement<combinatorial_map::Dart<2>>(combinatorial_map::CombinatorialMap<2>* mesh,
                                                              combinatorial_map::Dart<2> e) {
+  (void)mesh; // tell compiler not to complain that mesh is unused
   return e.getIndex();
 }
 template <>
 inline size_t dataIndexOfElement<combinatorial_map::Dart<3>>(combinatorial_map::CombinatorialMap<3>* mesh,
                                                              combinatorial_map::Dart<3> e) {
+  (void)mesh; // tell compiler not to complain that mesh is unused
   return e.getIndex();
 }
 template <>
 inline size_t dataIndexOfElement<combinatorial_map::Incidence<0, 1, 2>>(combinatorial_map::CombinatorialMap<2>* mesh,
                                                                         combinatorial_map::Incidence<0, 1, 2> e) {
+  (void)mesh; // tell compiler not to complain that mesh is unused
   return e.getIndex();
 }
 template <>
 inline size_t dataIndexOfElement<combinatorial_map::Incidence<0, 2, 2>>(combinatorial_map::CombinatorialMap<2>* mesh,
                                                                         combinatorial_map::Incidence<0, 2, 2> e) {
+  (void)mesh; // tell compiler not to complain that mesh is unused
   return e.getIndex();
 }
 template <>
 inline size_t dataIndexOfElement<combinatorial_map::Incidence<1, 2, 2>>(combinatorial_map::CombinatorialMap<2>* mesh,
                                                                         combinatorial_map::Incidence<1, 2, 2> e) {
+  (void)mesh; // tell compiler not to complain that mesh is unused
   return e.getIndex();
 }
 template <>
 inline size_t dataIndexOfElement<combinatorial_map::Incidence<0, 1, 3>>(combinatorial_map::CombinatorialMap<3>* mesh,
                                                                         combinatorial_map::Incidence<0, 1, 3> e) {
+  (void)mesh; // tell compiler not to complain that mesh is unused
   return e.getIndex();
 }
 template <>
 inline size_t dataIndexOfElement<combinatorial_map::Incidence<0, 2, 3>>(combinatorial_map::CombinatorialMap<3>* mesh,
                                                                         combinatorial_map::Incidence<0, 2, 3> e) {
+  (void)mesh; // tell compiler not to complain that mesh is unused
   return e.getIndex();
 }
 template <>
 inline size_t dataIndexOfElement<combinatorial_map::Incidence<1, 2, 3>>(combinatorial_map::CombinatorialMap<3>* mesh,
                                                                         combinatorial_map::Incidence<1, 2, 3> e) {
+  (void)mesh; // tell compiler not to complain that mesh is unused
   return e.getIndex();
 }
 template <>
 inline size_t dataIndexOfElement<combinatorial_map::Incidence<0, 3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh,
                                                                         combinatorial_map::Incidence<0, 3, 3> e) {
+  (void)mesh; // tell compiler not to complain that mesh is unused
   return e.getIndex();
 }
 template <>
 inline size_t dataIndexOfElement<combinatorial_map::Incidence<1, 3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh,
                                                                         combinatorial_map::Incidence<1, 3, 3> e) {
+  (void)mesh; // tell compiler not to complain that mesh is unused
   return e.getIndex();
 }
 template <>
 inline size_t dataIndexOfElement<combinatorial_map::Incidence<2, 3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh,
                                                                         combinatorial_map::Incidence<2, 3, 3> e) {
+  (void)mesh; // tell compiler not to complain that mesh is unused
   return e.getIndex();
 }
 

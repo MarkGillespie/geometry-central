@@ -18,6 +18,12 @@ inline size_t CombinatorialMap<D>::nCells() const {
 }
 
 template <size_t D>
+inline size_t CombinatorialMap<D>::nCells(size_t k) const {
+  return nCellsCount[k];
+}
+
+
+template <size_t D>
 template <size_t k1, size_t k2>
 inline size_t CombinatorialMap<D>::nIncidences() const { // WARNING: if incidences have not been used, returns 0
   static_assert(k1 < k2, "an incidence must have cell dimensions k1 < k2");
@@ -664,16 +670,16 @@ inline Incidence<k1, k2, D> CombinatorialMap<D>::incidence(size_t index) {
 }
 
 template <size_t D>
-inline Incidence<0, D, D> CombinatorialMap<D>::vertexCorner() {
-  return incidence<0, D>(index);
+inline Incidence<0, D, D> CombinatorialMap<D>::vertexCorner(size_t index) {
+  return incidence<0, D>(this, index);
 }
 template <size_t D>
-inline Incidence<1, D, D> CombinatorialMap<D>::edgeCorner() {
-  return incidence<1, D>(index);
+inline Incidence<1, D, D> CombinatorialMap<D>::edgeCorner(size_t index) {
+  return incidence<1, D>(this, index);
 }
 template <size_t D>
-inline Incidence<0, 2, D> CombinatorialMap<D>::faceCorner() {
-  return incidence<0, 2>(index);
+inline Incidence<0, 2, D> CombinatorialMap<D>::faceCorner(size_t index) {
+  return incidence<0, 2>(this, index);
 }
 
 template <size_t D>
@@ -1154,6 +1160,7 @@ constexpr std::array<std::array<size_t, 4>,12> listPositivePermutations<4>() {
 
 template <> // simplexDartMaps<2>(), used in CombinatorialMap<2>
 constexpr std::array<std::array<size_t, 3>, 1> simplexDartMaps<2>(const std ::array<std::array<size_t, 3>, 3>& _) {
+  (void)_; // tell the compiler not to complain that _ is unused
   return {{ // for some reason, C++11 wants double braces for std::array
       {1, 2, 0} // dartMap[0]
   }};
@@ -1161,6 +1168,7 @@ constexpr std::array<std::array<size_t, 3>, 1> simplexDartMaps<2>(const std ::ar
 
 template <> // simplexDartMaps<3>(), used in CombinatorialMap<3>
 constexpr std::array<std::array<size_t, 12>, 2> simplexDartMaps<3>(const std::array<std::array<size_t, 4>, 12>& _) {
+  (void)_; // tell the compiler not to complain that _ is unused
   return {{  // for some reason, C++11 wants double braces for std::array
       {4, 8, 10, 2, 6, 11, 0, 5, 9, 1, 3, 7}, // dartMap[0]
       {3, 6, 9, 0, 7, 10, 1, 4, 11, 2, 5, 8}  // dartMap[1]
@@ -1932,8 +1940,8 @@ private:
 
 template <size_t D>
 std::vector<Dart<D>> incidenceNeighboringDarts(Dart<D> d, size_t k1, size_t k2, bool verbose) {
+  if (verbose) std::cout << "... computing neighboring darts for " << d << std::endl;
   std::vector<Dart<D>> result;
-
   if (k1 == 0) { // k1 = 0, k2 > 0. Take 0-cell compositions, skipping k2-1
     for (size_t iMap = 1; iMap < D; ++iMap) {
       if (iMap + 1 == k2) continue;

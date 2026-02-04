@@ -84,6 +84,8 @@ public:
   size_t nDarts() const;
   template <size_t k> // nCells<k>() counts k-cells
   size_t nCells() const;
+  size_t nCells(size_t k) const; // counts k-cells
+
   //== Aliases for some common k-cells
   size_t nVertices() const; // counts 0-cells
   size_t nEdges() const;    // counts 1-cells
@@ -154,9 +156,9 @@ public:
   template <size_t k1, size_t k2>
   Incidence<k1, k2, D> incidence(size_t index);
   //== Aliases for some common incidences
-  Incidence<0, D, D> vertexCorner(); // (0, D)-incidences
-  Incidence<1, D, D> edgeCorner();   // (1, D)-incidences
-  Incidence<0, 2, D> faceCorner();   // (0, 2)-incidences
+  Incidence<0, D, D> vertexCorner(size_t index); // (0, D)-incidences
+  Incidence<1, D, D> edgeCorner(size_t index);   // (1, D)-incidences
+  Incidence<0, 2, D> faceCorner(size_t index);   // (0, 2)-incidences
 
   DartData<D, size_t> getDartIndices();
 
