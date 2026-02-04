@@ -2,6 +2,8 @@
 
 #include "geometrycentral/utilities/utilities.h"
 
+#include <Eigen/Dense>
+
 #include <array>
 #include <cmath>
 #include <iostream>
@@ -18,6 +20,7 @@ struct Vector3 {
 
   static Vector3 zero() { return Vector3{0., 0., 0.}; }
   static Vector3 constant(double c) { return Vector3{c, c, c}; }
+  static Vector3 fromEigen(Eigen::Vector3d v) { return Vector3{v(0), v(1), v(2)}; }
   static Vector3 infinity() {
     const double inf = ::std::numeric_limits<double>::infinity();
     return Vector3{inf, inf, inf};
@@ -43,6 +46,9 @@ struct Vector3 {
   bool operator==(const Vector3& v) const;
   bool operator!=(const Vector3& v) const;
   const Vector3 operator-() const;
+
+  // Conversion to Eigen::Vector3d
+  operator Eigen::Vector3d() const;
 
   // Other functions
   Vector3 rotateAround(Vector3 axis, double theta) const;

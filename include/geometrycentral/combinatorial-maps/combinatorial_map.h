@@ -36,6 +36,9 @@ using FaceData = MeshData<Face<D>, T>;
 template <size_t D, typename T>
 using DartData = MeshData<Dart<D>, T>;
 
+template <size_t k1, size_t k2, size_t D, typename T>
+using IncidenceData = MeshData<Incidence<k1, k2, D>, T>;
+
 template <size_t D>
 class CombinatorialMap;
 
@@ -79,23 +82,43 @@ public:
 
   // Number of mesh elements of each type
   size_t nDarts() const;
-  size_t nVertices() const;
-  size_t nEdges() const;
-  size_t nFaces() const;
-  template <size_t k>
+  template <size_t k> // nCells<k>() counts k-cells
   size_t nCells() const;
+  size_t nCells(size_t k) const; // counts k-cells
+
+  //== Aliases for some common k-cells
+  size_t nVertices() const; // counts 0-cells
+  size_t nEdges() const;    // counts 1-cells
+  size_t nFaces() const;    // counts 2-cells
+  size_t nCells() const;    // counts 3-cells
+
+  template <size_t k1, size_t k2>
+  size_t nIncidences() const; // WARNING: if incidences have not been used, returns 0
+  //== Aliases for some common incidences
+  size_t nVertexCorners() const; // counts (0, D)-incidences
+  size_t nEdgeCorners() const;   // counts (1, D)-incidences
+  size_t nFaceCorners() const;   // counts (0, 2)-incidences
 
   // Methods for range-based for loops
   // Example: for(Vertex v : mesh.vertices()) { ... }
   DartSet<D> darts();
-  VertexSet<D> vertices();
-  EdgeSet<D> edges();
-  FaceSet<D> faces();
-  template <size_t k>
+  template <size_t k> // call cells<k>() for k-cells
   CellSet<k, D> cells();
+  //== Aliases for some common k-cells
+  VertexSet<D> vertices(); // 0-cells
+  EdgeSet<D> edges();      // 1-cells
+  FaceSet<D> faces();      // 2-cells
+  CellSet<3, D> cells();   // 3-cells
+
+  template <size_t k1, size_t k2>
+  IncidenceSet<k1, k2, D> incidences();
+  //== Aliases for some common incidences
+  IncidenceSet<0, D, D> vertexCorners(); // (0, D)-incidences
+  IncidenceSet<1, D, D> edgeCorners();   // (1, D)-incidences
+  IncidenceSet<0, 2, D> faceCorners();   // (0, 2)-incidences
 
   template <size_t k>
-  std::vector<Dart<D>> adjacentDarts(Cell<k, D> cell);
+  std::vector<Dart<D>> adjacentDarts(Cell<k, D> cell) const;
   template <size_t k1, size_t k2>
   std::vector<Cell<k2, D>> adjacentCells(Cell<k1, D> cell) const;
   template <size_t k>
@@ -104,24 +127,49 @@ public:
   std::vector<Edge<D>> adjacentEdges(Cell<k, D> cell) const;
   template <size_t k>
   std::vector<Face<D>> adjacentFaces(Cell<k, D> cell) const;
+  // Returns a dart in c1 which is also in c2, or Dart<D>() if no such dart can be found
+  template <size_t k1, size_t k2>
+  Dart<D> adjacentDartInCell(Cell<k1, D> c1, Cell<k2, D> c2) const;
+
+  // OrderedIncidence<a, b> is just an ordinary incidence, but with a and b ordered properly, i.e. Incidence<a,b>
+  // if a < b and Incidence<b,a> otherwise
+  template <size_t k1, size_t k2>
+  std::vector<OrderedIncidence<k1, k2, D>> adjacentIncidences(Cell<k1, D> cell);
+
+  template <size_t k1, size_t k2>
+  std::vector<Dart<D>> adjacentDarts(Incidence<k1, k2, D> incidence) const;
+  template <size_t k1, size_t k2, size_t k>
+  std::vector<Cell<k, D>> adjacentCells(Incidence<k1, k2, D> cell) const;
 
 
   // Methods for accessing elements by index
   // only valid when the  mesh is compressed
   Dart<D> dart(size_t index);
-  Vertex<D> vertex(size_t index);
-  Edge<D> edge(size_t index);
-  Face<D> face(size_t index);
   template <size_t k>
   Cell<k, D> cell(size_t index);
+  //== Aliases for some common k-cells
+  Vertex<D> vertex(size_t index); // 0-cells
+  Edge<D> edge(size_t index);     // 1-cells
+  Face<D> face(size_t index);     // 2-cells
+  Cell<3, D> cell(size_t index);  // 3-cells
+
+  template <size_t k1, size_t k2>
+  Incidence<k1, k2, D> incidence(size_t index);
+  //== Aliases for some common incidences
+  Incidence<0, D, D> vertexCorner(size_t index); // (0, D)-incidences
+  Incidence<1, D, D> edgeCorner(size_t index);   // (1, D)-incidences
+  Incidence<0, 2, D> faceCorner(size_t index);   // (0, 2)-incidences
 
   DartData<D, size_t> getDartIndices();
 
   VertexData<D, size_t> getVertexIndices();
   EdgeData<D, size_t> getEdgeIndices();
   FaceData<D, size_t> getFaceIndices();
-  template <size_t k>
+  CellData<3, D, size_t> getCellIndices(); // getCellIndices() indexes 3-cells
+  template <size_t k>                      // getCellIndices<k>() indexes k-cells
   CellData<k, D, size_t> getCellIndices();
+  template <size_t k1, size_t k2>
+  IncidenceData<k1, k2, D, size_t> getIncidenceIndices();
 
   template <size_t k>
   SparseMatrix<int> getBoundaryMatrix(); // boundary of k-cell as a sum of (k-1)-cells
@@ -138,6 +186,7 @@ public:
   std::vector<std::vector<size_t>> getCellVertexList();
 
   std::unique_ptr<CombinatorialMap> copy() const;
+  std::unique_ptr<CombinatorialMap<D>> dual() const;
   // std::unique_ptr<ManifoldCombinatorialMap> toManifoldMesh();
 
   // Compress the mesh
@@ -158,12 +207,15 @@ public:
   // in use immediately).
   std::list<std::function<void(size_t)>> dartExpandCallbackList;
   std::array<std::list<std::function<void(size_t)>>, D + 1> cellExpandCallbackList;
+  std::map<std::pair<size_t, size_t>, std::list<std::function<void(size_t)>>> incidenceExpandCallbackList;
 
   // Compression callbacks
   // Argument is a permutation to a apply, such that d_new[i] = d_old[p[i]]. THe length of the permutation is hte size
   // of the new index space. Any elements with p[i] == INVALID_IND are unused in the new index space.
   std::list<std::function<void(const std::vector<size_t>&)>> dartPermuteCallbackList;
   std::array<std::list<std::function<void(const std::vector<size_t>&)>>, D + 1> cellPermuteCallbackList;
+  std::map<std::pair<size_t, size_t>, std::list<std::function<void(const std::vector<size_t>&)>>>
+      incidencePermuteCallbackList;
 
   // Mesh delete callbacks
   // (this unfortunately seems to be necessary; objects which have registered their callbacks above
@@ -179,6 +231,8 @@ public:
   size_t nFacesCapacity() const;
   template <size_t k>
   size_t nCellsCapacity() const;
+  template <size_t k1, size_t k2>
+  size_t nIncidencesCapacity() const;
 
   // Return the size corresponding to the largest raw index in the mesh (except corners, see below). That is, the
   // maximum value of he.getIndex()+1 for all halfedges, etc. This may differ from `nHalfedges()` or
@@ -200,10 +254,14 @@ public:
   // == Debugging, etc
 
   // Performs a sanity checks on dart structure; throws on fail
-  void validateConnectivity();
+  // If allowDeadDarts is false, also throws if any darts are dead
+  void validateConnectivity(bool allowDeadDarts = false);
 
   // index k-cells and fill cDartArr[k] and dCellArr[k] based off of dartMap
   void indexCells(size_t k);
+
+  void indexIncidences(size_t k1, size_t k2);
+  void ensureHaveIncidences(size_t k1, size_t k2); // helper to populate incidence arrays lazily as needed
 
 protected:
   // Constructor used by subclasses
@@ -226,12 +284,16 @@ protected:
   std::array<std::vector<size_t>, D + 1> dCellArr; // dart.cell<k>().getIndex()
   std::array<std::vector<bool>, D + 1> dCellSgn;   // dart.cell<k>().orientation()
 
+  std::map<std::pair<size_t, size_t>, std::vector<size_t>> iDartArr;      // incidence[(k1, k2)].dart()
+  std::map<std::pair<size_t, size_t>, std::vector<size_t>> dIncidenceArr; // dart.incidence<k1, k2>.getIndex()
+
   // Auxilliary arrays which cache other useful information
 
   // Track element counts (can't rely on rawVertices.size() after deletions have made the list sparse). These are the
   // actual number of valid elements, not the size of the buffer that holds them.
   size_t nDartsCount = 0;
   std::array<size_t, D + 1> nCellsCount{};
+  std::map<std::pair<size_t, size_t>, size_t> nIncidencesCount;
 
   // == Track the capacity and fill size of our buffers.
   // These give the capacity of the currently allocated buffer.
@@ -239,6 +301,7 @@ protected:
   // arr.size()).
   size_t nDartsCapacityCount = 0;                  // will always be even if implicit twin
   std::array<size_t, D + 1> nCellsCapacityCount{}; // will always be even if implicit twin
+  std::map<std::pair<size_t, size_t>, size_t> nIncidencesCapacityCount;
 
   // These give the number of filled elements in the currently allocated buffer. This will also be the maximal index of
   // any element (except the weirdness of boundary loop faces). As elements get marked dead, nVerticesCount decreases
@@ -246,6 +309,7 @@ protected:
   // stored.
   size_t nDartsFillCount = 0; // must always be even if implicit twin
   std::array<size_t, D + 1> nCellsFillCount{};
+  std::map<std::pair<size_t, size_t>, size_t> nIncidencesFillCount;
 
   // The mesh is _compressed_ if all of the index spaces are dense. E.g. if thare are |V| vertices, then the vertices
   // are densely indexed from 0 ... |V|-1 (and likewise for the other elements). The mesh can become not-compressed as
@@ -269,6 +333,7 @@ protected:
   Cell<k, D> getNewCell();
 
   size_t getNewCellIndex(size_t k); // equal to getNewCell<k>().index()
+  size_t getNewIncidenceIndex(std::pair<size_t, size_t> k1k2);
 
   void allocateCells(size_t k, size_t n); // ensure we have space for n more k-cells
   template <size_t k>
@@ -279,6 +344,8 @@ protected:
   template <size_t k>
   bool cellIsDead(size_t iC) const;
   bool cellIsDead(size_t k, size_t iC) const;
+  template <size_t k1, size_t k2>
+  bool incidenceIsDead(size_t iI) const;
 
   // Deletes leave tombstones, which can be cleaned up with compress().
   // Note that these routines merely mark the element as dead. The caller should hook up connectivity to exclude these
@@ -304,7 +371,22 @@ protected:
   friend class Cell;
   template <size_t k, size_t D1>
   friend struct CellRangeF;
+
+  template <size_t k1, size_t k2, size_t D1>
+  friend class Incidence;
+  template <size_t k1, size_t k2, size_t D1>
+  friend struct IncidenceRangeF;
 };
+
+template <size_t D>
+std::vector<Dart<D>> incidenceNeighboringDarts(Dart<D> d, size_t k1, size_t k2, bool verbose = false);
+
+// helpers
+namespace unionfind {
+size_t findRoot(size_t x, std::vector<size_t>& parent, std::vector<bool>& sharesParentSign);
+void unite(size_t x, size_t y, bool samesign, std::vector<size_t>& parent, std::vector<bool>& sharesParentSign,
+           std::vector<size_t>& rank);
+} // namespace unionfind
 
 } // namespace combinatorial_map
 } // namespace geometrycentral

@@ -69,6 +69,8 @@ inline bool Vector2::operator!=(const Vector2& other) const { return !(*this == 
 
 inline Vector2::operator std::complex<double>() const { return std::complex<double>{x, y}; }
 
+inline Vector2::operator Eigen::Vector2d() const { return Eigen::Vector2d{x, y}; }
+
 inline Vector2 Vector2::normalize() const {
   double r = 1. / std::sqrt(x * x + y * y);
   return *this * r;
@@ -90,9 +92,7 @@ inline Vector2 unit(const Vector2& v) { return normalize(v); }
 
 inline Vector2 normalizeCutoff(const Vector2& v, double mag) { return v.normalizeCutoff(mag); }
 
-inline Vector2 Vector2::rotate(double theta) const {
-  return rotateCW(theta);
-}
+inline Vector2 Vector2::rotate(double theta) const { return rotateCW(theta); }
 
 inline Vector2 Vector2::rotateCW(double theta) const {
   double cosTh = std::cos(theta);
@@ -100,9 +100,7 @@ inline Vector2 Vector2::rotateCW(double theta) const {
   return Vector2{cosTh * x + sinTh * y, -sinTh * x + cosTh * y};
 }
 
-inline Vector2 Vector2::rotateCCW(double theta) const {
-  return rotateCW(-theta);
-}
+inline Vector2 Vector2::rotateCCW(double theta) const { return rotateCW(-theta); }
 
 inline Vector2 Vector2::rotate90() const { return Vector2{-y, x}; }
 

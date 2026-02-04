@@ -37,6 +37,16 @@ using Face = Cell<2, D>;
 template <size_t D, size_t E>
 struct DartOrbitNavigator;
 
+// Represents the incidence of a k1-cell inside a k2-cell for k1 < k2
+// E.g. an Incidence<0, 2, D> is a corner of a face
+template <size_t k1, size_t k2, size_t D>
+class Incidence;
+
+// OrderedIncidence<a, b> creates an Incidence with a and b in the right order, i.e. Incidence<a,b> if a < b, and
+// Incidence<b, a> otherwise
+template <size_t a, size_t b, size_t D>
+using OrderedIncidence = typename std::conditional<(a < b), Incidence<a, b, D>, Incidence<b, a, D>>::type;
+
 // ==========================================================
 // ================        Dart        ==================
 // ==========================================================
@@ -49,13 +59,27 @@ public:
   Dart(CombinatorialMap<D>* mesh, size_t ind); // construct pointing to the i'th element of that type on a mesh.
   // Dart(const Dynamic Element<Dart>& e); // construct from a dynamic element of matching type
 
-  // Navigators
-  Vertex<D> vertex() const;
-  Edge<D> edge() const;
-  Face<D> face() const;
-
+  //=== Navigators
   template <size_t k>
-  Cell<k, D> cell() const;
+  Cell<k, D> cell() const; // k-cell
+  //== Aliases for some common k-cells
+  Vertex<D> vertex() const; // 0-cell
+  Edge<D> edge() const;     // 1-cell
+  Face<D> face() const;     // 2-cell
+  Cell<3, D> cell() const;  // 3-cell
+
+  Vertex<D> tailVertex() const; // same as .vertex()
+  Vertex<D> tipVertex() const;  // same as .next().vertex()
+
+  template <size_t k1, size_t k2>
+  Incidence<k1, k2, D> incidence() const;
+  //== Aliases for some common incidences
+  Incidence<0, D, D> vertexCorner() const; // (0, D)-incidence
+  Incidence<1, D, D> edgeCorner() const;   // (1, D)-incidence
+  Incidence<0, 2, D> faceCorner() const;   // (0, 2)-incidence
+
+  template <size_t iPartner>
+  Dart<D> partner() const;
 
   Dart<D> partner(size_t d) const;
   Dart<D> next() const;
@@ -76,7 +100,7 @@ template <size_t D>
 using DartSet = RangeSetBase<DartRangeF<D>>;
 
 // ==========================================================
-// ================        k-Cell        ==================
+// ================        k-Cell        ====================
 // ==========================================================
 
 template <size_t k, size_t D>
@@ -88,24 +112,43 @@ public:
   Cell(CombinatorialMap<D>* mesh, size_t ind,
        bool orientation); // construct pointing to the i'th element of that type on a mesh with specified orientation
 
-  // Navigators
+  //=== Navigators
   Dart<D> dart() const;
+  // finds a dart in this cell which is also in the input cell, or Dart<D>() if no such dart is found
+  template <size_t k2>
+  Dart<D> dartInCell(Cell<k2, D> cell) const;
 
   std::vector<Dart<D>> adjacentDarts() const;
   template <size_t k2>
-  std::vector<Cell<k2, D>> adjacentCells() const;
-  std::vector<Vertex<D>> adjacentVertices() const;
-  std::vector<Edge<D>> adjacentEdges() const;
-  std::vector<Face<D>> adjacentFaces() const;
+  std::vector<Cell<k2, D>> adjacentCells() const; // adjacentCells<k> gives k-cells
+  //== Aliases for some common k-cells
+  std::vector<Vertex<D>> adjacentVertices() const; // 0-cells
+  std::vector<Edge<D>> adjacentEdges() const;      // 1-cells
+  std::vector<Face<D>> adjacentFaces() const;      // 2-cells
+  std::vector<Cell<3, D>> adjacentCells() const;   //  3-cells
+
+  template <size_t k2> // function for iterating over adjacent incidences with higher-dimensional cells
+  std::vector<OrderedIncidence<k, k2, D>> adjacentIncidences() const;
+  //== Aliases for some common incidences
+  // Warning: only defined for k-cells which are part of the incidence. e.g., you can call adjacentEdgeCorners() on and
+  // edge or a top-dimensional cell, but not on a 0-cell
+  std::vector<Incidence<0, D, D>> adjacentVertexCorners() const; // (0, D)-incidences
+  std::vector<Incidence<1, D, D>> adjacentEdgeCorners() const;   // (1, D)-incidences
+  std::vector<Incidence<0, 2, D>> adjacentFaceCorners() const;   // (0, 2)-incidences
 
   bool isDead() const;
-  bool isBoundary() const;
+  bool isBoundary() const; // returns true if the cell is totally contained in the mesh boundary
 
   bool orientation() const;
   void flipOrientation();
   void setOrientation(bool orientation);
 
   int sign() const;
+
+  bool orientationInCell(Cell<k + 1, D> c) const;
+  bool orientationInCell(Cell<k - 1, D> c) const;
+  int signInCell(Cell<k + 1, D> c) const; // entry in boundary_{k+1} matrix
+  int signInCell(Cell<k - 1, D> c) const; // entry in boundary_k matrix
 
 protected:
   bool mOrientation = true;
@@ -131,6 +174,63 @@ using EdgeSet = CellSet<1, D>;
 
 template <size_t D>
 using FaceSet = CellSet<2, D>;
+
+
+// ==========================================================
+// ==============       k-Cell Incidence       ==============
+// ==========================================================
+
+// Class to represent ``incidence'' between a k1 cell and a k2 cell. For instance, a corners of a triangle is a
+// (0,2)-incidence, and a ``hinges'' of a tetrahedron is a (1,3)-incidence
+
+// Warning: these can be weirdly-behaved on boundary edges of triangle meshes, where there is only one dart on each
+// edge. For example, a single triangle only has three (0, 1)-incidences instead of 6, since this implementation of
+// (0,1) incidences identifies an incidence with the set of darts common to both k-cells.
+
+template <size_t k1, size_t k2, size_t D>
+class Incidence : public Element<Incidence<k1, k2, D>, CombinatorialMap<D>> {
+  static_assert(k1 < k2, "Incidence requires k1 < k2");
+  static_assert(k2 <= D, "Incidence requires k2 <= D");
+
+public:
+  // Constructors
+  Incidence();                                      // construct an empty (null) element
+  Incidence(CombinatorialMap<D>* mesh, size_t ind); // construct pointing to the i'th element of that type on a mesh.
+
+  // Navigators
+  Dart<D> dart() const;
+
+  template <size_t k>
+  Cell<k, D> cell() const;  // adjacent k-cell. Only defined for k=k1 or k=k2
+  Vertex<D> vertex() const; // convenience alias for cell<0>()
+  Edge<D> edge() const;     // convenience alias for cell<1>()
+  Face<D> face() const;     // convenience alias for cell<2>()
+  Cell<3, D> cell() const;  // convenience alias for cell<3>()
+
+  std::vector<Dart<D>> adjacentDarts() const;
+  template <size_t k>
+  std::vector<Cell<k, D>> adjacentCells() const; // adjacentCells<k> gives k-cells
+  //== Aliases for some common k-cells
+  std::vector<Vertex<D>> adjacentVertices() const; // 0-cells
+  std::vector<Edge<D>> adjacentEdges() const;      // 1-cells
+  std::vector<Face<D>> adjacentFaces() const;      // 2-cells
+  std::vector<Cell<3, D>> adjacentCells() const;   //  3-cells
+
+  bool isDead() const;
+  bool isBoundary() const;
+};
+
+// == Range iterators
+
+// All vertices
+template <size_t k1, size_t k2, size_t D>
+struct IncidenceRangeF {
+  static bool elementOkay(const CombinatorialMap<D>& mesh, size_t ind);
+  typedef Incidence<k1, k2, D> Etype;
+  typedef CombinatorialMap<D> ParentMeshT;
+};
+template <size_t k1, size_t k2, size_t D>
+using IncidenceSet = RangeSetBase<IncidenceRangeF<k1, k2, D>>;
 } // namespace combinatorial_map
 
 // Declare specializations of the logic templates. This is important, because these need to be declared before any of

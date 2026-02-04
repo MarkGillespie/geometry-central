@@ -19,14 +19,14 @@ class CombinatorialMapSuite : public ::testing::Test {};
 // =============== Basic validation tests
 // ============================================================
 
-TEST_F(HalfedgeMeshSuite, ValidateClosedMeshTest) {
+TEST_F(CombinatorialMapSuite, ValidateClosedMeshTest) {
   for (MeshAsset& a : closedMeshes()) {
     a.printThyName();
     a.mesh->validateConnectivity();
   }
 }
 
-TEST_F(HalfedgeMeshSuite, ValidateBoundaryMeshTest) {
+TEST_F(CombinatorialMapSuite, ValidateBoundaryMeshTest) {
   for (MeshAsset& a : boundaryMeshes()) {
     a.printThyName();
     a.mesh->validateConnectivity();
@@ -37,7 +37,7 @@ TEST_F(HalfedgeMeshSuite, ValidateBoundaryMeshTest) {
 // =============== Constructor tests
 // ============================================================
 
-TEST_F(HalfedgeMeshSuite, MatrixConstructorTest) {
+TEST_F(CombinatorialMapSuite, MatrixConstructorTest) {
 
   std::unique_ptr<SurfaceMesh> mesh = getAsset("spot.ply", false).mesh;
 
@@ -72,7 +72,7 @@ TEST_F(HalfedgeMeshSuite, MatrixConstructorTest) {
   }
 }
 
-TEST_F(HalfedgeMeshSuite, MatrixConstructorManifoldTest) {
+TEST_F(CombinatorialMapSuite, MatrixConstructorManifoldTest) {
 
   std::unique_ptr<SurfaceMesh> mesh = getAsset("spot.ply", false).mesh;
 
@@ -111,7 +111,7 @@ TEST_F(HalfedgeMeshSuite, MatrixConstructorManifoldTest) {
 // =============== Range iterator tests
 // ============================================================
 
-TEST_F(HalfedgeMeshSuite, IterateVerticesTest) {
+TEST_F(CombinatorialMapSuite, IterateVerticesTest) {
   for (MeshAsset& a : allMeshes()) {
     a.printThyName();
 
@@ -124,7 +124,7 @@ TEST_F(HalfedgeMeshSuite, IterateVerticesTest) {
   }
 }
 
-TEST_F(HalfedgeMeshSuite, IterateHalfedgesTest) {
+TEST_F(CombinatorialMapSuite, IterateHalfedgesTest) {
   for (MeshAsset& a : allMeshes()) {
     a.printThyName();
 
@@ -137,7 +137,7 @@ TEST_F(HalfedgeMeshSuite, IterateHalfedgesTest) {
   }
 }
 
-TEST_F(HalfedgeMeshSuite, IterateInteriorHalfedgesTest) {
+TEST_F(CombinatorialMapSuite, IterateInteriorHalfedgesTest) {
   for (MeshAsset& a : allMeshes()) {
     a.printThyName();
 
@@ -150,7 +150,7 @@ TEST_F(HalfedgeMeshSuite, IterateInteriorHalfedgesTest) {
   }
 }
 
-TEST_F(HalfedgeMeshSuite, IterateExteriorHalfedgesTest) {
+TEST_F(CombinatorialMapSuite, IterateExteriorHalfedgesTest) {
   for (MeshAsset& a : allMeshes()) {
     a.printThyName();
 
@@ -163,7 +163,7 @@ TEST_F(HalfedgeMeshSuite, IterateExteriorHalfedgesTest) {
   }
 }
 
-TEST_F(HalfedgeMeshSuite, IterateCornersTest) {
+TEST_F(CombinatorialMapSuite, IterateCornersTest) {
   for (MeshAsset& a : allMeshes()) {
     a.printThyName();
 
@@ -176,7 +176,7 @@ TEST_F(HalfedgeMeshSuite, IterateCornersTest) {
   }
 }
 
-TEST_F(HalfedgeMeshSuite, IterateEdgesTest) {
+TEST_F(CombinatorialMapSuite, IterateEdgesTest) {
   for (MeshAsset& a : allMeshes()) {
     a.printThyName();
 
@@ -189,7 +189,7 @@ TEST_F(HalfedgeMeshSuite, IterateEdgesTest) {
   }
 }
 
-TEST_F(HalfedgeMeshSuite, IterateFacesTest) {
+TEST_F(CombinatorialMapSuite, IterateFacesTest) {
   for (MeshAsset& a : allMeshes()) {
     a.printThyName();
 
@@ -202,7 +202,7 @@ TEST_F(HalfedgeMeshSuite, IterateFacesTest) {
   }
 }
 
-TEST_F(HalfedgeMeshSuite, IterateBoundaryLoopsTest) {
+TEST_F(CombinatorialMapSuite, IterateBoundaryLoopsTest) {
   for (MeshAsset& a : allMeshes()) {
     a.printThyName();
 
@@ -220,7 +220,7 @@ TEST_F(HalfedgeMeshSuite, IterateBoundaryLoopsTest) {
 // =============== Counts and internals
 // ============================================================
 
-TEST_F(HalfedgeMeshSuite, IndexCountTest) {
+TEST_F(CombinatorialMapSuite, IndexCountTest) {
   for (MeshAsset& a : allMeshes()) {
     a.printThyName();
 
@@ -280,7 +280,7 @@ TEST_F(HalfedgeMeshSuite, IndexCountTest) {
 // =============== Utility and status functions
 // ============================================================
 
-TEST_F(HalfedgeMeshSuite, HasBoundaryTest) {
+TEST_F(CombinatorialMapSuite, HasBoundaryTest) {
   for (MeshAsset& a : closedMeshes()) {
     a.printThyName();
     EXPECT_FALSE(a.mesh->hasBoundary());
@@ -292,7 +292,7 @@ TEST_F(HalfedgeMeshSuite, HasBoundaryTest) {
 }
 
 
-TEST_F(HalfedgeMeshSuite, IsTriangularTest) {
+TEST_F(CombinatorialMapSuite, IsTriangularTest) {
   EXPECT_EQ(getAsset("tet.obj", false).mesh->isTriangular(), true);
   EXPECT_EQ(getAsset("spot.ply", false).mesh->isTriangular(), true);
   EXPECT_EQ(getAsset("dodecahedron_poly.obj", false).mesh->isTriangular(), false);
@@ -301,21 +301,21 @@ TEST_F(HalfedgeMeshSuite, IsTriangularTest) {
   EXPECT_EQ(getAsset("lego.ply", false).mesh->isTriangular(), true);
 }
 
-TEST_F(HalfedgeMeshSuite, EulerCharacteristicTest) {
+TEST_F(CombinatorialMapSuite, EulerCharacteristicTest) {
   EXPECT_EQ(getAsset("tet.obj", true).manifoldMesh->eulerCharacteristic(), 2);
   EXPECT_EQ(getAsset("spot.ply", true).manifoldMesh->eulerCharacteristic(), 2);
   EXPECT_EQ(getAsset("dodecahedron_poly.obj", true).manifoldMesh->eulerCharacteristic(), 2);
   EXPECT_EQ(getAsset("bob_small.ply", true).manifoldMesh->eulerCharacteristic(), 0);
 }
 
-TEST_F(HalfedgeMeshSuite, GenusTest) {
+TEST_F(CombinatorialMapSuite, GenusTest) {
   EXPECT_EQ(getAsset("tet.obj", true).manifoldMesh->genus(), 0);
   EXPECT_EQ(getAsset("spot.ply", true).manifoldMesh->genus(), 0);
   EXPECT_EQ(getAsset("dodecahedron_poly.obj", true).manifoldMesh->genus(), 0);
   EXPECT_EQ(getAsset("bob_small.ply", true).manifoldMesh->genus(), 1);
 }
 
-TEST_F(HalfedgeMeshSuite, ConnectedComponentsTest) {
+TEST_F(CombinatorialMapSuite, ConnectedComponentsTest) {
   EXPECT_EQ(getAsset("tet.obj", false).mesh->nConnectedComponents(), 1);
   EXPECT_EQ(getAsset("spot.ply", false).mesh->nConnectedComponents(), 1);
   EXPECT_EQ(getAsset("dodecahedron_poly.obj", false).mesh->nConnectedComponents(), 1);
@@ -325,7 +325,7 @@ TEST_F(HalfedgeMeshSuite, ConnectedComponentsTest) {
 }
 
 
-TEST_F(HalfedgeMeshSuite, PrintElementTest) {
+TEST_F(CombinatorialMapSuite, PrintElementTest) {
   MeshAsset a = getAsset("lego.ply", true);
   SurfaceMesh& mesh = *a.mesh;
   std::cout << mesh.halfedge(0) << std::endl;
@@ -337,7 +337,7 @@ TEST_F(HalfedgeMeshSuite, PrintElementTest) {
 }
 
 
-TEST_F(HalfedgeMeshSuite, PrintElementStringTest) {
+TEST_F(CombinatorialMapSuite, PrintElementStringTest) {
   MeshAsset a = getAsset("lego.ply", true);
   SurfaceMesh& mesh = *a.mesh;
   std::cout << std::to_string(mesh.halfedge(0)) << std::endl;
@@ -355,7 +355,7 @@ TEST_F(HalfedgeMeshSuite, PrintElementStringTest) {
 
 
 // Make sure that nothing explodes if we delete the mesh before the container
-TEST_F(HalfedgeMeshSuite, ContainerMeshDestructTest) {
+TEST_F(CombinatorialMapSuite, ContainerMeshDestructTest) {
   std::unique_ptr<SurfaceMesh> mesh = getAsset("spot.ply", false).mesh;
 
   {
@@ -372,7 +372,7 @@ TEST_F(HalfedgeMeshSuite, ContainerMeshDestructTest) {
 }
 
 
-TEST_F(HalfedgeMeshSuite, ContainerAccessTest) {
+TEST_F(CombinatorialMapSuite, ContainerAccessTest) {
   std::unique_ptr<SurfaceMesh> mesh = getAsset("spot.ply", false).mesh;
 
   {
@@ -399,7 +399,7 @@ TEST_F(HalfedgeMeshSuite, ContainerAccessTest) {
 // (theoretically) if one is correct they all should be.
 // TODO add tests on non-compressed meshes to make sure there's nothing funky going on there.
 
-TEST_F(HalfedgeMeshSuite, ContainerArithmeticPlus) {
+TEST_F(CombinatorialMapSuite, ContainerArithmeticPlus) {
   std::unique_ptr<SurfaceMesh> mesh = getAsset("spot.ply", false).mesh;
 
   {
@@ -439,7 +439,7 @@ TEST_F(HalfedgeMeshSuite, ContainerArithmeticPlus) {
   }
 }
 
-TEST_F(HalfedgeMeshSuite, ContainerArithmeticMinus) {
+TEST_F(CombinatorialMapSuite, ContainerArithmeticMinus) {
   std::unique_ptr<SurfaceMesh> mesh = getAsset("spot.ply", false).mesh;
 
   { // operator-
@@ -480,7 +480,7 @@ TEST_F(HalfedgeMeshSuite, ContainerArithmeticMinus) {
   }
 }
 
-TEST_F(HalfedgeMeshSuite, ContainerArithmeticMult) {
+TEST_F(CombinatorialMapSuite, ContainerArithmeticMult) {
   std::unique_ptr<SurfaceMesh> mesh = getAsset("spot.ply", false).mesh;
 
   { // operator*
@@ -529,7 +529,7 @@ TEST_F(HalfedgeMeshSuite, ContainerArithmeticMult) {
   }
 }
 
-TEST_F(HalfedgeMeshSuite, ContainerArithmeticDiv) {
+TEST_F(CombinatorialMapSuite, ContainerArithmeticDiv) {
   std::unique_ptr<SurfaceMesh> mesh = getAsset("spot.ply", false).mesh;
 
   { // operator /
@@ -570,7 +570,7 @@ TEST_F(HalfedgeMeshSuite, ContainerArithmeticDiv) {
   }
 }
 
-TEST_F(HalfedgeMeshSuite, ContainerArithmeticMod) {
+TEST_F(CombinatorialMapSuite, ContainerArithmeticMod) {
   std::unique_ptr<SurfaceMesh> mesh = getAsset("spot.ply", false).mesh;
 
   { // operator %
@@ -617,7 +617,7 @@ TEST_F(HalfedgeMeshSuite, ContainerArithmeticMod) {
   }
 }
 
-TEST_F(HalfedgeMeshSuite, ContainerArithmeticUnary) {
+TEST_F(CombinatorialMapSuite, ContainerArithmeticUnary) {
   std::unique_ptr<SurfaceMesh> mesh = getAsset("spot.ply", false).mesh;
 
   { // operator +
@@ -644,7 +644,7 @@ TEST_F(HalfedgeMeshSuite, ContainerArithmeticUnary) {
 // =============== Navigators
 // ============================================================
 
-TEST_F(HalfedgeMeshSuite, PrevTest) {
+TEST_F(CombinatorialMapSuite, PrevTest) {
   for (MeshAsset& a : allMeshes()) {
     a.printThyName();
 
@@ -656,7 +656,7 @@ TEST_F(HalfedgeMeshSuite, PrevTest) {
   }
 }
 
-TEST_F(HalfedgeMeshSuite, VertexAdjacentNavigator) {
+TEST_F(CombinatorialMapSuite, VertexAdjacentNavigator) {
   for (MeshAsset& a : allMeshes()) {
     a.printThyName();
 
@@ -672,7 +672,7 @@ TEST_F(HalfedgeMeshSuite, VertexAdjacentNavigator) {
 }
 
 
-TEST_F(HalfedgeMeshSuite, VertexCornerNavigatorInterior) {
+TEST_F(CombinatorialMapSuite, VertexCornerNavigatorInterior) {
   for (MeshAsset& a : allMeshes()) {
     a.printThyName();
 
@@ -685,7 +685,7 @@ TEST_F(HalfedgeMeshSuite, VertexCornerNavigatorInterior) {
 }
 
 
-TEST_F(HalfedgeMeshSuite, VertexEdgeNavigator) {
+TEST_F(CombinatorialMapSuite, VertexEdgeNavigator) {
   for (MeshAsset& a : polygonalComplexMeshes()) {
     a.printThyName();
 
@@ -709,7 +709,7 @@ TEST_F(HalfedgeMeshSuite, VertexEdgeNavigator) {
   }
 }
 
-TEST_F(HalfedgeMeshSuite, VertexFaceNavigator) {
+TEST_F(CombinatorialMapSuite, VertexFaceNavigator) {
   for (MeshAsset& a : polygonalComplexMeshes()) {
     a.printThyName();
 
@@ -733,7 +733,7 @@ TEST_F(HalfedgeMeshSuite, VertexFaceNavigator) {
   }
 }
 
-TEST_F(HalfedgeMeshSuite, FaceFaceNavigator) {
+TEST_F(CombinatorialMapSuite, FaceFaceNavigator) {
   for (MeshAsset& a : polygonalComplexMeshes()) {
     a.printThyName();
 
@@ -763,7 +763,7 @@ TEST_F(HalfedgeMeshSuite, FaceFaceNavigator) {
   }
 }
 
-TEST_F(HalfedgeMeshSuite, EdgeVertexNavigator) {
+TEST_F(CombinatorialMapSuite, EdgeVertexNavigator) {
   // test firstVertex()/secondVertex() and e.adjacentVertices()
 
   std::unique_ptr<SurfaceMesh> mesh = getAsset("spot.ply", false).mesh;
@@ -784,7 +784,7 @@ TEST_F(HalfedgeMeshSuite, EdgeVertexNavigator) {
   }
 }
 
-TEST_F(HalfedgeMeshSuite, EdgeDiamondNavigator) {
+TEST_F(CombinatorialMapSuite, EdgeDiamondNavigator) {
 
   std::unique_ptr<SurfaceMesh> mesh = getAsset("spot.ply", false).mesh;
 
@@ -807,7 +807,7 @@ TEST_F(HalfedgeMeshSuite, EdgeDiamondNavigator) {
 // =============== Utilities
 // ============================================================
 
-TEST_F(HalfedgeMeshSuite, IsManifoldOrientedTest) {
+TEST_F(CombinatorialMapSuite, IsManifoldOrientedTest) {
 
   {
     auto asset = getAsset("lego.ply", false);
@@ -846,7 +846,7 @@ TEST_F(HalfedgeMeshSuite, IsManifoldOrientedTest) {
 // =============== Rich mesh
 // ============================================================
 
-TEST_F(HalfedgeMeshSuite, RichMeshDataSaveLoadProperties) {
+TEST_F(CombinatorialMapSuite, RichMeshDataSaveLoadProperties) {
 
   for (auto& asset : {getAsset("lego.ply", false), getAsset("lego.ply", true)}) {
 
@@ -901,7 +901,7 @@ TEST_F(HalfedgeMeshSuite, RichMeshDataSaveLoadProperties) {
 
 // TODO test these after a deletion
 
-TEST_F(HalfedgeMeshSuite, RichMeshDataSaveLoadMeshGeneral) {
+TEST_F(CombinatorialMapSuite, RichMeshDataSaveLoadMeshGeneral) {
 
   for (auto& asset : {getAsset("lego.ply", false), getAsset("lego.ply", true)}) {
 
@@ -939,7 +939,7 @@ TEST_F(HalfedgeMeshSuite, RichMeshDataSaveLoadMeshGeneral) {
   }
 }
 
-TEST_F(HalfedgeMeshSuite, RichMeshDataSaveLoadMeshManifold) {
+TEST_F(CombinatorialMapSuite, RichMeshDataSaveLoadMeshManifold) {
 
   for (auto& asset : {getAsset("lego.ply", false), getAsset("lego.ply", true)}) {
 
