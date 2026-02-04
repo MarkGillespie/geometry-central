@@ -77,6 +77,11 @@ public:
   // boundaryMap[1][i] must list the edges in face i in counterclockwise order
   CombinatorialMap(const std::array<std::vector<std::vector<std::pair<size_t, bool>>>, D>& boundaryMaps);
 
+  // Construct directly from internal arrays
+  CombinatorialMap(const std::array<std::vector<size_t>, D>& dartMap);
+
+  static CombinatorialMap<D> Random(size_t nDarts);
+
   ~CombinatorialMap();
 
 
@@ -263,12 +268,11 @@ public:
   void indexIncidences(size_t k1, size_t k2);
   void ensureHaveIncidences(size_t k1, size_t k2); // helper to populate incidence arrays lazily as needed
 
+  const std::array<std::vector<size_t>, D>& getDartMap() const;
+
 protected:
   // Constructor used by subclasses
   CombinatorialMap();
-
-  // Construct directly from internal arrays
-  CombinatorialMap(const std::array<std::vector<size_t>, D>& dartMap);
 
   void constructFromBoundaryMaps(const std::array<std::vector<std::vector<std::pair<size_t, bool>>>, D>& boundaryMaps);
 

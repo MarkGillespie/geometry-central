@@ -347,6 +347,11 @@ inline void CombinatorialMap<D>::ensureHaveIncidences(size_t k1, size_t k2) {
 }
 
 template <size_t D>
+const std::array<std::vector<size_t>, D>& CombinatorialMap<D>::getDartMap() const {
+  return dartMap;
+}
+
+template <size_t D>
 size_t CombinatorialMap<D>::dartIndexSize() const {
   return nDartsFillCount;
 }
@@ -990,7 +995,10 @@ void CombinatorialMap<D>::indexCells(size_t k) {
   }
 
   // Clear any existing k-cells
+  dCellArr[k].resize(nDarts());
   std::fill(dCellArr[k].begin(), dCellArr[k].end(), INVALID_IND);
+  dCellSgn[k].resize(nDarts());
+  std::fill(dCellSgn[k].begin(), dCellSgn[k].end(), true);
   nCellsFillCount[k] = 0;
   nCellsCount[k] = 0;
 
@@ -1325,21 +1333,51 @@ CombinatorialMap<D>::CombinatorialMap(const std::vector<std::array<size_t, D + 1
     }
   }
 
+  // trim excess capacity
   nCellsCapacityCount[0] = nCellsCount[0];
   nCellsFillCount[0] = nCellsCount[0];
   nDartsCapacityCount = nDartsCount;
   nDartsFillCount = nDartsCount;
+  for (size_t k = 0; k < D; k++) dartMap[k].resize(nDartsCount);
 
   // Shrink internal arrays for 3-cells (which may be over-sized since they're allocated by doubling)
   cDartArr[D].resize(nCellsCount[D]);
   nCellsCapacityCount[D] = nCellsCount[D];
 
-  // construct 1-cells and 2-cells
+  // construct intermediate k-cells
   for (size_t k = 1; k < D; k++) indexCells(k);
 
   if (DEBUG_PRINT) {
     for (size_t k = 0; k <= D; k++) std::cout << "# " << k << "-cells : " << nCellsCount[k] << std::endl;
   }
+}
+
+// Construct directly from dart map
+template <size_t D>
+CombinatorialMap<D>::CombinatorialMap(const std::array<std::vector<size_t>, D>& dartMap_) {
+  dartMap = dartMap_;
+
+  nDartsCount = dartMap[0].size();
+  nDartsFillCount = nDartsCount;
+  nDartsCapacityCount = nDartsCount;
+
+  for (size_t k = 0; k <= D; k++) indexCells(k);
+
+  isCompressedFlag = true;
+}
+
+template <size_t D>
+static CombinatorialMap<D> CombinatorialMap<D>::Random(size_t nDarts) {
+  if (nDarts % 2 == 1)
+    throw std::logic_error("CombinatorialMap<D>::Random error: number of darts in a combinatorial map must be even");
+  std::array<std::vector<size_t>, D> dartMap;
+  dartMap[0] = std::vector<size_t>(nDarts); // Without loss of generality, set adjacent darts to be twins
+  for (size_t iDart = 0; iDart < nDarts; iDart += 2) {
+    dartMap[0][iDart] = iDart + 1;
+    dartMap[0][iDart + 1] = iDart;
+  }
+
+  // generate remaining permutations randomly
 }
 
 // // TODO: finish this, maybe by constructing boundary matrices
@@ -1691,6 +1729,9 @@ void CombinatorialMap<D>::validateConnectivity(bool allowDeadDarts) {
     if (nCellsFillCount[dim] > nCellsCapacityCount[dim])
       throw std::logic_error(std::to_string(dim) + "-cell fill (" + std::to_string(nCellsFillCount[dim]) + ") > " +
                              std::to_string(dim) + "-cell capacity (" + std::to_string(nCellsCapacityCount[dim]) + ")");
+    if (dim < D && dartMap[dim].size() != nDartsCapacityCount)
+      throw std::logic_error("dart map[" + std::to_string(dim) + "] has size " + std::to_string(dartMap[dim].size()) +
+                             " even though nDartsCapacityCount is " + std::to_string(nDartsCapacityCount));
   }
 
   // Check for overflow / other unreasonable values
