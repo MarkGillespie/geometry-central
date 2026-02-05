@@ -1,3 +1,24 @@
+// popcount support across different environments
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
+
+inline int popcount(uint32_t x) {
+#if defined(_MSC_VER)
+  return __popcnt(x);
+#elif defined(__GNUC__) || defined(__clang__)
+  return __builtin_popcount(x);
+#else
+  // Software fallback for other compilers
+  x = x - ((x >> 1) & 0x55555555);
+  x = (x & 0x33333333) + ((x >> 2) & 0x33333333);
+  x = (x + (x >> 4)) & 0x0F0F0F0F;
+  x = x + (x >> 8);
+  x = x + (x >> 16);
+  return x & 0x3F;
+#endif
+}
+
 namespace geometrycentral {
 namespace combinatorial_map {
 
@@ -1019,6 +1040,28 @@ void CombinatorialMap<D>::indexCells(size_t k) {
   nCellsCapacityCount[k] = nCellsCount[k];
 }
 
+template <>
+void CombinatorialMap<1>::indexCells(size_t k) { // In 1D, every dart has its own vertex and edge
+  if (k > 1) return;
+
+  // Clear any existing k-cells
+  dCellArr[k].resize(nDarts());
+  dCellSgn[k].resize(nDarts());
+  nCellsFillCount[k] = 0;
+  nCellsCount[k] = 0;
+
+  // Assign new k-cell indices
+  for (size_t iDart = 0; iDart < nDarts(); iDart++) {
+    dCellArr[k][iDart] = getNewCellIndex(k);
+    dCellSgn[k][iDart] = true;
+    cDartArr[k][dCellArr[k][iDart]] = iDart;
+  }
+
+  // Shrink internal arrays
+  cDartArr[k].resize(nCellsCount[k]);
+  nCellsCapacityCount[k] = nCellsCount[k];
+}
+
 // index k-cells and fill cDartArr[k] and dCellArr[k] based off of dartMap
 template <size_t D>
 void CombinatorialMap<D>::indexIncidences(size_t k1, size_t k2) {
@@ -1364,20 +1407,6 @@ CombinatorialMap<D>::CombinatorialMap(const std::array<std::vector<size_t>, D>& 
   for (size_t k = 0; k <= D; k++) indexCells(k);
 
   isCompressedFlag = true;
-}
-
-template <size_t D>
-static CombinatorialMap<D> CombinatorialMap<D>::Random(size_t nDarts) {
-  if (nDarts % 2 == 1)
-    throw std::logic_error("CombinatorialMap<D>::Random error: number of darts in a combinatorial map must be even");
-  std::array<std::vector<size_t>, D> dartMap;
-  dartMap[0] = std::vector<size_t>(nDarts); // Without loss of generality, set adjacent darts to be twins
-  for (size_t iDart = 0; iDart < nDarts; iDart += 2) {
-    dartMap[0][iDart] = iDart + 1;
-    dartMap[0][iDart + 1] = iDart;
-  }
-
-  // generate remaining permutations randomly
 }
 
 // // TODO: finish this, maybe by constructing boundary matrices
@@ -1894,7 +1923,7 @@ struct OrbitNeighborhoodIterator {
   OrbitNeighborhoodIterator(Dart<D> d, size_t k_) : startDart(d), iMap(0), k(k_), jMap(0) {
     if (k == 0) {
       iMap = 1;
-      iPartner = startDart.partner(iMap);
+      iPartner = D > 1 ? startDart.partner(iMap) : startDart;
     }
     while (!isValid() && !finished()) advance();
   }
@@ -2005,6 +2034,237 @@ std::vector<Dart<D>> incidenceNeighboringDarts(Dart<D> d, size_t k1, size_t k2, 
     }
   }
   return result;
+}
+
+// computes n choose k, used as a helper function for the product complex constructor
+constexpr size_t binomial(size_t n, size_t k) {
+  // handle some edge cases, then use recurrence n choose k = (n-1) choose (k-1) * n/k (or compute n choose (n-k) if
+  // that's easier)
+  return (k > n) ? 0 : (k == 0 || k == n) ? 1 : (k <= n - k) ? binomial(n - 1, k - 1) * n / k : binomial(n, n - k);
+}
+
+// Enumerate all D1-subsets of {0, ..., D1+D2-1} as interleaving codes
+template <size_t D1, size_t D2>
+constexpr std::array<uint32_t, binomial(D1 + D2, D1)> computeInterleavings();
+
+template <> // 1d x 1d
+std::array<uint32_t, 2> computeInterleavings<1, 1>() {
+  return {0b01, 0b10};
+}
+
+template <> // 2d x 1d
+std::array<uint32_t, 3> computeInterleavings<2, 1>() {
+  return {0b011, 0b101, 0b110};
+}
+
+template <> // 1d x 2d
+std::array<uint32_t, 3> computeInterleavings<1, 2>() {
+  return {0b100, 0b010, 0b001};
+}
+
+template <> // 2d x 2d
+std::array<uint32_t, 6> computeInterleavings<2, 2>() {
+  return {0b0011, 0b0101, 0b0110, 0b1001, 0b1010, 0b1100};
+}
+
+template <size_t D>
+size_t interleavingIndex(const std::array<uint32_t, D>& table, uint32_t mask) {
+  return std::find(table.begin(), table.end(), mask) - table.begin();
+}
+
+// Construct the product mesh
+template <size_t D1, size_t D2>
+std::unique_ptr<CombinatorialMap<D1 + D2>> productMesh(const CombinatorialMap<D1>& A, const CombinatorialMap<D2>& B) {
+  static_assert(D1 <= 2 && D2 <= 2, "to take products of higher-dimensional meshes, you need to implement "
+                                    "computeInterleavings<d1, d2> for d1, d2 >= 3");
+
+  // WARNING: assumes A, B are compressed
+  const size_t nA = A.dartMap[0].size();
+  const size_t nB = B.dartMap[0].size();
+  const auto interleavings = computeInterleavings<D1, D2>();
+  const size_t nS = interleavings.size();
+  const size_t nAB = nA * nB * nS * 2;
+
+  std::cout << "nS = " << nS << std::endl;
+  std::cout << "nAB = " << nAB << std::endl;
+
+  // Index: (a, b, s, sign) -> ((a * nB + b) * nS + s) * 2 + sign where sign ∈ {0, 1} represents {+, -}
+  auto toIdx = [nB, nS](size_t a, size_t b, size_t s, size_t sign) { return 2 * (a * (nB * nS) + b * nS + s) + sign; };
+  auto fromIdx = [nB, nS](size_t index) {
+    size_t sign = index % 2;
+    size_t remainder = index / 2;
+    size_t s = remainder % nS;
+    remainder /= nS;
+    size_t b = remainder % nB;
+    size_t a = remainder / nB;
+    return std::make_tuple(a, b, s, sign);
+  };
+
+  const auto& mA = A.dartMap;
+  const auto& mB = B.dartMap;
+
+  std::array<std::vector<size_t>, D1 + D2> dartMapAB;
+  for (std::vector<size_t>& v : dartMapAB) v.resize(nAB);
+
+  for (size_t a = 0; a < nA; ++a) {
+    for (size_t b = 0; b < nB; ++b) {
+      for (size_t s = 0; s < nS; ++s) {
+        for (size_t sign = 0; sign < 2; ++sign) {
+          const size_t idx = toIdx(a, b, s, sign);
+          const uint32_t sigma = interleavings[s];
+          for (size_t k = 0; k < D1 + D2; ++k) {
+            bool kInA = (sigma >> k) & 1;
+            if (k == 0) { // Next map: cycle around in face
+              bool nextInA = (sigma >> 1) & 1;
+              if (kInA && nextInA) { // Pure A-face (f_A × v_B): cycle using A's next map
+                if (mA[0][a] == INVALID_IND) throw std::logic_error("cannot have an A-face if an A-edge has boundary");
+                dartMapAB[0][idx] = toIdx(mA[0][a], b, s, sign);
+              } else if (!kInA && !nextInA) { // Pure B-face (v_A × f_B): cycle using B's next map
+                if (mB[0][b] == INVALID_IND) throw std::logic_error("cannot have an B-face if an B-edge has boundary");
+                dartMapAB[0][idx] = toIdx(a, mB[0][b], s, sign);
+              } else { // Product face (e_A × e_B): toggle interleaving, no factor maps needed
+                uint32_t newSigma = sigma ^ 0b11;
+                size_t newS = interleavingIndex(interleavings, newSigma);
+                size_t newSign = !kInA ? sign : (1 - sign);
+                dartMapAB[0][idx] = toIdx(a, b, newS, newSign);
+              }
+            } else { // Higher dimensional twin map: should be an involution
+              uint32_t prefixMask = (1u << k) - 1;
+              size_t iA = popcount(sigma & prefixMask);
+              size_t iB = k - iA;
+              bool prevInA = (k > 0) && ((sigma >> (k - 1)) & 1);
+              // α_k for k > 0: involutions
+              if (kInA == prevInA) {
+                // Same factor for positions k-1 and k
+                if (kInA) {
+                  // Pure A cell
+                  size_t newA = mA[iA][a];
+                  if (newA == INVALID_IND) {
+                    bool isTop = (k == D1 + D2 - 1) && (iA == D1 - 1);
+                    if (isTop) {
+                      dartMapAB[k][idx] = INVALID_IND;
+                    } else {
+                      // Find prev_A(a) by iterating next
+                      size_t prevA = a;
+                      while (mA[0][prevA] != a) {
+                        prevA = mA[0][prevA];
+                      }
+                      if (sign == 0) {
+                        dartMapAB[k][idx] = toIdx(prevA, b, s, 1);
+                      } else {
+                        dartMapAB[k][idx] = toIdx(mA[0][a], b, s, 0);
+                      }
+                    }
+                  } else {
+                    dartMapAB[k][idx] = toIdx(newA, b, s, sign);
+                  }
+                } else {
+                  // Pure B cell
+                  size_t newB = mB[iB][b];
+                  if (newB == INVALID_IND) {
+                    bool isTop = (k == D1 + D2 - 1) && (iB == D2 - 1);
+                    if (isTop) {
+                      dartMapAB[k][idx] = INVALID_IND;
+                    } else {
+                      // Find prev_B(b) by iterating next
+                      size_t prevB = b;
+                      while (mB[0][prevB] != b) {
+                        prevB = mB[0][prevB];
+                      }
+                      if (sign == 0) {
+                        dartMapAB[k][idx] = toIdx(a, prevB, s, 1);
+                      } else {
+                        dartMapAB[k][idx] = toIdx(a, mB[0][b], s, 0);
+                      }
+                    }
+                  } else {
+                    dartMapAB[k][idx] = toIdx(a, newB, s, sign);
+                  }
+                }
+              } else {
+                // Different factors: toggle interleaving bits k-1,k AND flip sign
+                uint32_t toggleMask = (1u << (k - 1)) | (1u << k);
+                uint32_t newSigma = sigma ^ toggleMask;
+                size_t newS = interleavingIndex(interleavings, newSigma);
+
+                if (k == D1 + D2 - 1) {
+                  // Top dimension: check boundary
+                  size_t totalA = popcount(sigma);
+                  size_t totalB = (D1 + D2) - totalA;
+                  if (totalA != D1) throw std::logic_error("totalA definitely has to equal D1");
+                  if (totalB != D2) throw std::logic_error("totalA definitely has to equal D2");
+                  bool boundaryA = (totalA == D1) && (mA[D1 - 1][a] == INVALID_IND);
+                  bool boundaryB = (totalB == D2) && (mB[D2 - 1][b] == INVALID_IND);
+                  if (boundaryA || boundaryB) {
+                    dartMapAB[k][idx] = INVALID_IND;
+                  } else {
+                    dartMapAB[k][idx] = toIdx(a, b, newS, 1 - sign);
+                  }
+                } else {
+                  dartMapAB[k][idx] = toIdx(a, b, newS, 1 - sign);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  std::cout << " ==== constructed product mesh ==== " << std::endl;
+  std::cout << " == Input A == " << std::endl;
+  for (size_t k = 0; k < A.dartMap.size(); k++) {
+    std::cout << "map[" << k << "] = {";
+    for (size_t iD = 0; iD < A.dartMap[k].size(); iD++) std::cout << " " << A.dartMap[k][iD];
+    std::cout << " }" << std::endl;
+  }
+  std::cout << " == Input B == " << std::endl;
+  for (size_t k = 0; k < B.dartMap.size(); k++) {
+    std::cout << "map[" << k << "] = {";
+    for (size_t iD = 0; iD < B.dartMap[k].size(); iD++) std::cout << " " << B.dartMap[k][iD];
+    std::cout << " }" << std::endl;
+  }
+
+  std::cout << " == Output AB == " << std::endl;
+  std::cout << "         {";
+  for (size_t iD = 0; iD < dartMapAB[0].size(); iD++) std::cout << " " << iD;
+  std::cout << " }" << std::endl;
+  for (size_t k = 0; k < dartMapAB.size(); k++) {
+    std::cout << "map[" << k << "] = {";
+    for (size_t iD = 0; iD < dartMapAB[k].size(); iD++) std::cout << " " << dartMapAB[k][iD];
+    std::cout << " }" << std::endl;
+    if (k == 0) {
+      std::cout << " > orbits";
+      std::vector<char> visited(dartMapAB[0].size(), false);
+      for (size_t j = 0; j < visited.size(); j++) {
+        if (visited[j]) continue;
+        std::cout << " (" << j;
+        size_t iDart = dartMapAB[0][j];
+        visited[iDart] = true;
+        while (iDart != j) {
+          std::cout << " " << iDart;
+          iDart = dartMapAB[0][iDart];
+          visited[iDart] = true;
+        }
+        std::cout << ")";
+      }
+      std::cout << std::endl;
+    }
+  }
+
+  std::unique_ptr<CombinatorialMap<D1 + D2>> result(new CombinatorialMap<D1 + D2>(dartMapAB));
+  // // adjust cell indices
+  // for (size_t k = 0; k <= D1 + D2; k++) {
+  //   std::vector<size_t> dCellArr(result->nDarts());
+  //   std::vector<size_t> dCellSgn(result->nDarts());
+  //   std::vector<size_t> cDartArr(result->nCells(k));
+  //   for (size_t iDart = 0; iDart < nDarts(); iDart++) {
+  //     size_t a, b, s, sign;
+  //     std::tie(a, b, s, sign) = fromIdx(iDart);
+  //   }
+  // }
+
+  return std::move(result);
 }
 
 namespace unionfind {

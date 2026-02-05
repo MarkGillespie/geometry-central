@@ -80,8 +80,6 @@ public:
   // Construct directly from internal arrays
   CombinatorialMap(const std::array<std::vector<size_t>, D>& dartMap);
 
-  static CombinatorialMap<D> Random(size_t nDarts);
-
   ~CombinatorialMap();
 
 
@@ -380,10 +378,19 @@ protected:
   friend class Incidence;
   template <size_t k1, size_t k2, size_t D1>
   friend struct IncidenceRangeF;
+
+  // Also allow product constructor direct access
+  template <size_t D1, size_t D2>
+  friend std::unique_ptr<CombinatorialMap<D1 + D2>> productMesh(const CombinatorialMap<D1>& A,
+                                                                const CombinatorialMap<D2>& B);
 };
 
 template <size_t D>
 std::vector<Dart<D>> incidenceNeighboringDarts(Dart<D> d, size_t k1, size_t k2, bool verbose = false);
+
+// Construct the product mesh
+template <size_t D1, size_t D2>
+std::unique_ptr<CombinatorialMap<D1 + D2>> productMesh(const CombinatorialMap<D1>& A, const CombinatorialMap<D2>& B);
 
 // helpers
 namespace unionfind {
