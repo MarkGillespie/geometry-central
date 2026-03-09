@@ -453,7 +453,12 @@ bool IntegerCoordinatesIntrinsicTriangulation::flipEdgeIfPossible(Edge e) {
   double A2 = cross(layoutPositions[3] - layoutPositions[2], layoutPositions[1] - layoutPositions[2]);
   double areaEPS = triangleTestEPS * (A1 + A2);
 
+  // std::cout << "A1: " << A1 << "\tA2: " << A2 << "\teps: " << areaEPS << "\t A1 < areaEPS: " << (A1 < areaEPS)
+  //           << "\t A2 < areaEPS: " << (A2 < areaEPS)
+  //           << "\t(integercoordinatesintrinsictriangulation::flipedgeifpossible())" << std::endl;
+
   if (A1 < areaEPS || A2 < areaEPS) {
+    // std::cout << "impossible" << std::endl;
     return false;
   }
 

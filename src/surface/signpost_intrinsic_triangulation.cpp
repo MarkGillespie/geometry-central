@@ -333,6 +333,7 @@ bool SignpostIntrinsicTriangulation::flipEdgeIfPossible(Edge e) {
   // Test if geometryically flippable flippable (both signed areas of new triangles are positive)
   double A1 = cross(layoutPositions[1] - layoutPositions[0], layoutPositions[3] - layoutPositions[0]);
   double A2 = cross(layoutPositions[3] - layoutPositions[2], layoutPositions[1] - layoutPositions[2]);
+  // std::cout << "A1: " << A1 << ",\tA2: " << A2 << std::endl;
   double areaEPS = triangleTestEPS * (A1 + A2);
   if (A1 < areaEPS || A2 < areaEPS) {
     return false;
@@ -340,6 +341,85 @@ bool SignpostIntrinsicTriangulation::flipEdgeIfPossible(Edge e) {
 
   // Compute the new edge length
   double newLength = (layoutPositions[1] - layoutPositions[3]).norm();
+
+  // check triangle inequality on new edge length
+  {
+    double tol = 1e-8;
+    // std::cout << he.next().tipVertex() << ",\t" << he.tailVertex() << ",\t" << he.twin().next().tipVertex() << ",\t"
+    //           << he.tipVertex() << std::endl;
+    const EdgeData<double>& l = edgeLengths;
+
+    size_t iV = 142, jV = 535;
+    // size_t iV = 766, jV = 206;
+    if (false && ((he.next().tipVertex().getIndex() == iV || he.next().tipVertex().getIndex() == jV) &&
+                  (he.twin().next().tipVertex().getIndex() == iV || he.twin().next().tipVertex().getIndex() == jV))) {
+      {
+        std::cout << "---- left ----" << std::endl;
+        Edge jk = e.halfedge().next().next().edge();
+        Edge ki = e.halfedge().twin().next().edge();
+        double lij = newLength;
+        double ljk = l[jk];
+        double lki = l[ki];
+
+        std::cout << "ljk: " << ljk << ", lki: " << lki << ", lij: " << lij << std::endl;
+        std::cout << "ljk + lki - lij: " << ljk + lki - lij << std::endl;
+        std::cout << "jk: " << jk << ",\tki: " << ki << std::endl;
+      }
+      {
+        std::cout << "---- right ----" << std::endl;
+        Edge jk = e.halfedge().twin().next().next().edge();
+        Edge ki = e.halfedge().next().edge();
+        double lij = newLength;
+        double ljk = l[jk];
+        double lki = l[ki];
+
+        std::cout << "ljk: " << ljk << ", lki: " << lki << ", lij: " << lij << std::endl;
+        std::cout << "ljk + lki - lij: " << ljk + lki - lij << std::endl;
+        std::cout << "jk: " << jk << ",\tki: " << ki << std::endl;
+      }
+    }
+
+    // edges of left post-flip triangle
+    {
+      double lij = newLength;
+      double ljk = l[e.halfedge().next().next().edge()];
+      double lki = l[e.halfedge().twin().next().edge()];
+
+      if (lij + ljk < lki + tol) {
+        // std::cout << "lij: " << lij << ", ljk: " << ljk << ", lki: " << lki << std::endl;
+        // std::cout << "lij + ljk - lki: " << lij + ljk - lki << std::endl;
+        return false;
+      } else if (ljk + lki < lij + tol) {
+        // std::cout << "ljk: " << ljk << ", lki: " << lki << ", lij: " << lij << std::endl;
+        // std::cout << "ljk + lki - lij: " << ljk + lki - lij << std::endl;
+        return false;
+      } else if (lki + lij < ljk + tol) {
+        // std::cout << "lki: " << lki << ", lij: " << lij << ", ljk: " << ljk << std::endl;
+        // std::cout << "lki + lij - ljk: " << lki + lij - ljk << std::endl;
+        return false;
+      }
+    }
+
+    { // right triangle
+      double lij = newLength;
+      double ljk = l[e.halfedge().twin().next().next().edge()];
+      double lki = l[e.halfedge().next().edge()];
+
+      if (lij + ljk < lki + tol) {
+        // std::cout << "lij: " << lij << ", ljk: " << ljk << ", lki: " << lki << std::endl;
+        // std::cout << "lij + ljk - lki: " << lij + ljk - lki << std::endl;
+        return false;
+      } else if (ljk + lki < lij + tol) {
+        // std::cout << "ljk: " << ljk << ", lki: " << lki << ", lij: " << lij << std::endl;
+        // std::cout << "ljk + lki - lij: " << ljk + lki - lij << std::endl;
+        return false;
+      } else if (lki + lij < ljk + tol) {
+        // std::cout << "lki: " << lki << ", lij: " << lij << ", ljk: " << ljk << std::endl;
+        // std::cout << "lki + lij - ljk: " << lki + lij - ljk << std::endl;
+        return false;
+      }
+    }
+  }
 
   // If we're going to create a non-finite edge length, abort the flip
   // (only happens if you're in a bad numerical place)

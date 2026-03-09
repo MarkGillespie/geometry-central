@@ -109,9 +109,9 @@ inline SurfacePoint SurfacePoint::inFace(Face targetFace) const {
   }
 
   case SurfacePointType::Edge: {
-
-    double thisT = tEdge;
     for (Halfedge targetHe : edge.adjacentHalfedges()) {
+      // translate t to local halfedge orientation
+      double thisT = targetHe.orientation() ? tEdge : 1 - tEdge;
 
       int i = 0;
       for (Halfedge he : targetFace.adjacentHalfedges()) {
@@ -126,9 +126,6 @@ inline SurfacePoint SurfacePoint::inFace(Face targetFace) const {
         }
         i++;
       }
-
-      // Flip the point to be along the other halfedge
-      thisT = 1. - thisT;
     }
 
     break;
