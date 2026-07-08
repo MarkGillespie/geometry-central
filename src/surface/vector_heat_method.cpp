@@ -347,6 +347,8 @@ VertexData<Vector2> VectorHeatMethodSolver::computeLogMap(const Vertex& sourceVe
     return computeLogMap_AffineLocal(sourceVert);
   case LogMapStrategy::AffineAdaptive:
     return computeLogMap_AffineAdaptive(sourceVert);
+  default:
+    throw std::runtime_error("Unhandled switch value of type LogMapStrategy");
   }
 }
 
