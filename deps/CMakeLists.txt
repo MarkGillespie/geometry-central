@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.8...3.31)
 
 if(POLICY CMP0169)
     cmake_policy(SET CMP0169 OLD) # use deprecated FetchContent_Populate

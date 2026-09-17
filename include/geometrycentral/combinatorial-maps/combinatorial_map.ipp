@@ -2036,57 +2036,152 @@ std::vector<Dart<D>> incidenceNeighboringDarts(Dart<D> d, size_t k1, size_t k2, 
   return result;
 }
 
-// computes n choose k, used as a helper function for the product complex constructor
-constexpr size_t binomial(size_t n, size_t k) {
-  // handle some edge cases, then use recurrence n choose k = (n-1) choose (k-1) * n/k (or compute n choose (n-k) if
-  // that's easier)
-  return (k > n) ? 0 : (k == 0 || k == n) ? 1 : (k <= n - k) ? binomial(n - 1, k - 1) * n / k : binomial(n, n - k);
+// ---------------------------------------------------------------------------
+// Cartesian product of oriented combinatorial maps, with boundary.
+//
+// This follows the "flags + shuffle" construction derived in
+// Notes/cmap_product_boundary.cpp (which has its own dependency-free
+// reference implementation and test suite); see that file for the full
+// derivation. Ported here in terms of this class's own storage convention:
+//   * dartMap[0]   = "next"   = alpha_1 o alpha_0 (a partial injection only
+//                    when D == 1; a total permutation for D >= 2).
+//   * dartMap[k]   = "twin_k" = alpha_{k+1} o alpha_0, for k = 1..D-1. Only
+//                    the top twin_{D-1} may be partial (INVALID_IND marks a
+//                    boundary dart); interior twins are total.
+//   * A "flag" of a factor map is a pair (dart a, bool neg): neg = false is
+//     the positive flag a itself, neg = true is alpha_0(a).
+//
+// A flag of the product of cells sigma x tau is a triple
+//     (flag of A, flag of B, (d1,d2)-shuffle w),
+// where the shuffle records, at each dimension step, which factor grows.
+// sign(flag triple) = sign(flagA) * sign(flagB) * (-1)^inv(w). Darts of the
+// product map are exactly the positive-sign flag triples, encoded as
+// (a, b, shuffle rank r, bool na) with nb = na XOR parity(inv(w)).
+// ---------------------------------------------------------------------------
+
+// Inverse of a partial injection (INVALID_IND wherever undefined).
+inline std::vector<size_t> productInversePartialInjection(const std::vector<size_t>& p) {
+  std::vector<size_t> q(p.size(), INVALID_IND);
+  for (size_t i = 0; i < p.size(); i++) {
+    if (p[i] != INVALID_IND) q[p[i]] = i;
+  }
+  return q;
 }
 
-// Enumerate all D1-subsets of {0, ..., D1+D2-1} as interleaving codes
+// (d1,d2)-shuffles: words in {A,B}^{d1+d2} with d1 A-letters and d2
+// B-letters; letter k says whether the k-th dimension step of a product flag
+// grows the A factor or the B factor. Encoded as a bitmask: bit (k-1) set
+// <=> letter k grows B. `signBit` is the parity of inversions (#{B before A}
+// pairs), i.e. the sign flip that shuffle contributes to a product flag.
+struct ProductShuffleTable {
+  size_t d1, d2, d;
+  std::vector<uint32_t> word;   // rank -> mask
+  std::vector<int> rankOf;      // mask -> rank
+  std::vector<uint8_t> signBit; // rank -> parity of inversions
+};
+
+inline ProductShuffleTable buildProductShuffleTable(size_t d1, size_t d2) {
+  ProductShuffleTable T;
+  T.d1 = d1;
+  T.d2 = d2;
+  T.d = d1 + d2;
+  T.rankOf.assign((size_t)1 << T.d, -1);
+  for (uint32_t w = 0; w < (uint32_t(1) << T.d); w++) {
+    if ((size_t)popcount(w) != d2) continue;
+    int inv = 0, bs = 0;
+    for (size_t t = 0; t < T.d; t++) {
+      if ((w >> t) & 1u) bs++; // letter t+1 grows B
+      else inv += bs;         // an A-letter after `bs` B-letters
+    }
+    T.rankOf[w] = (int)T.word.size();
+    T.word.push_back(w);
+    T.signBit.push_back((uint8_t)(inv & 1));
+  }
+  return T;
+}
+
+// alpha_k of a factor map, acting on a flag (a, neg). `m` is that factor's
+// dartMap (m[0] = next, m[k-1] = twin_k for k >= 2). Returns false if
+// undefined, which can only happen for the factor's top operation
+// (k == Dim, the factor's dimension) at a boundary dart.
+//   alpha_0:           (a, neg) -> (a, !neg)
+//   alpha_1:           (a, +) -> (nextInv[a], -),  (a, -) -> (next[a], +)
+//   alpha_k (k >= 2):  (a, neg) -> (twin_{k-1}[a], !neg)
+template <size_t Dim>
+inline bool productApplyFactorAlpha(const std::array<std::vector<size_t>, Dim>& m, const std::vector<size_t>& nextInv,
+                                    size_t k, size_t& a, bool& neg) {
+  if (k == 0) {
+    neg = !neg;
+    return true;
+  }
+  size_t t = (k == 1) ? (neg ? m[0][a] : nextInv[a]) : m[k - 1][a];
+  if (t == INVALID_IND) return false;
+  a = t;
+  neg = !neg;
+  return true;
+}
+
+// A flag of the product map: a flag of each factor, plus a shuffle word
+// recording which factor grows at each dimension step.
+struct ProductFlag {
+  size_t a;
+  bool na;
+  size_t b;
+  bool nb;
+  uint32_t w;
+};
+
+// alpha_p of the product map, p = 0..d1+d2, acting on product flag `f`.
+// Returns false if undefined (only possible at p == d1+d2, the product's top
+// operation). Letting i(p), j(p) be the number of A-letters/B-letters among
+// the first p letters of w:
+//   p == 0:                 alpha_0 of A or B, chosen by the first letter
+//   p == d1+d2:              alpha_{d1} of A or alpha_{d2} of B, by the last letter
+//   0 < p < d1+d2, letters p,p+1 equal:   alpha_{i or j}(p) of that factor
+//                            differ: transpose letters p, p+1 of w
 template <size_t D1, size_t D2>
-constexpr std::array<uint32_t, binomial(D1 + D2, D1)> computeInterleavings();
-
-template <> // 1d x 1d
-std::array<uint32_t, 2> computeInterleavings<1, 1>() {
-  return {0b01, 0b10};
-}
-
-template <> // 2d x 1d
-std::array<uint32_t, 3> computeInterleavings<2, 1>() {
-  return {0b011, 0b101, 0b110};
-}
-
-template <> // 1d x 2d
-std::array<uint32_t, 3> computeInterleavings<1, 2>() {
-  return {0b100, 0b010, 0b001};
-}
-
-template <> // 2d x 2d
-std::array<uint32_t, 6> computeInterleavings<2, 2>() {
-  return {0b0011, 0b0101, 0b0110, 0b1001, 0b1010, 0b1100};
-}
-
-template <size_t D>
-size_t interleavingIndex(const std::array<uint32_t, D>& table, uint32_t mask) {
-  return std::find(table.begin(), table.end(), mask) - table.begin();
+inline bool productApplyAlpha(size_t p, ProductFlag& f, const std::array<std::vector<size_t>, D1>& mA,
+                              const std::vector<size_t>& nextInvA, const std::array<std::vector<size_t>, D2>& mB,
+                              const std::vector<size_t>& nextInvB) {
+  const size_t d = D1 + D2;
+  if (p == 0) {
+    if ((f.w & 1u) == 0) return productApplyFactorAlpha<D1>(mA, nextInvA, 0, f.a, f.na);
+    else return productApplyFactorAlpha<D2>(mB, nextInvB, 0, f.b, f.nb);
+  }
+  if (p == d) {
+    if (((f.w >> (d - 1)) & 1u) == 0) return productApplyFactorAlpha<D1>(mA, nextInvA, D1, f.a, f.na);
+    else return productApplyFactorAlpha<D2>(mB, nextInvB, D2, f.b, f.nb);
+  }
+  bool y1 = ((f.w >> (p - 1)) & 1u) != 0;
+  bool y2 = ((f.w >> p) & 1u) != 0;
+  if (y1 != y2) {
+    f.w ^= (1u << (p - 1)) | (1u << p); // transpose letters p, p+1
+    return true;
+  } else if (!y1) {
+    size_t i = p - (size_t)popcount(f.w & ((1u << p) - 1u)); // #A-letters among letters 1..p
+    return productApplyFactorAlpha<D1>(mA, nextInvA, i, f.a, f.na);
+  } else {
+    size_t j = (size_t)popcount(f.w & ((1u << p) - 1u)); // #B-letters among letters 1..p
+    return productApplyFactorAlpha<D2>(mB, nextInvB, j, f.b, f.nb);
+  }
 }
 
 // Construct the product mesh
 template <size_t D1, size_t D2>
 std::unique_ptr<CombinatorialMap<D1 + D2>> productMesh(const CombinatorialMap<D1>& A, const CombinatorialMap<D2>& B) {
-  static_assert(D1 <= 2 && D2 <= 2, "to take products of higher-dimensional meshes, you need to implement "
-                                    "computeInterleavings<d1, d2> for d1, d2 >= 3");
+  static_assert(D1 + D2 < 31, "productMesh: dimension too large for shuffle bitmask");
 
   // WARNING: assumes A, B are compressed
-  const size_t nA = A.dartMap[0].size();
-  const size_t nB = B.dartMap[0].size();
-  const auto interleavings = computeInterleavings<D1, D2>();
-  const size_t nS = interleavings.size();
-  const size_t nAB = nA * nB * nS * 2;
+  const auto& mA = A.dartMap;
+  const auto& mB = B.dartMap;
+  const size_t nA = mA[0].size();
+  const size_t nB = mB[0].size();
+  const std::vector<size_t> nextInvA = productInversePartialInjection(mA[0]);
+  const std::vector<size_t> nextInvB = productInversePartialInjection(mB[0]);
 
-  std::cout << "nS = " << nS << std::endl;
-  std::cout << "nAB = " << nAB << std::endl;
+  const ProductShuffleTable sh = buildProductShuffleTable(D1, D2);
+  const size_t nS = sh.word.size();
+  const size_t nAB = 2 * nA * nB * nS;
 
   // Index: (a, b, s, sign) -> ((a * nB + b) * nS + s) * 2 + sign where sign ∈ {0, 1} represents {+, -}
   auto toIdx = [nB, nS](size_t a, size_t b, size_t s, size_t sign) { return 2 * (a * (nB * nS) + b * nS + s) + sign; };
@@ -2100,171 +2195,299 @@ std::unique_ptr<CombinatorialMap<D1 + D2>> productMesh(const CombinatorialMap<D1
     return std::make_tuple(a, b, s, sign);
   };
 
-  const auto& mA = A.dartMap;
-  const auto& mB = B.dartMap;
+  // Encode/decode *positive* product flags (= darts of the product): a
+  // triple (flag of A, flag of B, shuffle) has sign sign(flagA)*sign(flagB)*
+  // (-1)^inv(shuffle); darts are exactly the positive-sign triples, so na
+  // determines nb via nb = na XOR parity(inv(shuffle)).
+  auto encode = [&](const ProductFlag& f) -> size_t {
+    int r = sh.rankOf[f.w];
+    return toIdx(f.a, f.b, (size_t)r, f.na ? 1 : 0);
+  };
+  auto decode = [&](size_t D) -> ProductFlag {
+    size_t a, b, s, sign;
+    std::tie(a, b, s, sign) = fromIdx(D);
+    ProductFlag f;
+    f.a = a;
+    f.b = b;
+    f.w = sh.word[s];
+    f.na = sign != 0;
+    f.nb = f.na != (sh.signBit[s] != 0);
+    return f;
+  };
 
   std::array<std::vector<size_t>, D1 + D2> dartMapAB;
   for (std::vector<size_t>& v : dartMapAB) v.resize(nAB);
 
-  for (size_t a = 0; a < nA; ++a) {
-    for (size_t b = 0; b < nB; ++b) {
-      for (size_t s = 0; s < nS; ++s) {
-        for (size_t sign = 0; sign < 2; ++sign) {
-          const size_t idx = toIdx(a, b, s, sign);
-          const uint32_t sigma = interleavings[s];
-          for (size_t k = 0; k < D1 + D2; ++k) {
-            bool kInA = (sigma >> k) & 1;
-            if (k == 0) { // Next map: cycle around in face
-              bool nextInA = (sigma >> 1) & 1;
-              if (kInA && nextInA) { // Pure A-face (f_A × v_B): cycle using A's next map
-                if (mA[0][a] == INVALID_IND) throw std::logic_error("cannot have an A-face if an A-edge has boundary");
-                dartMapAB[0][idx] = toIdx(mA[0][a], b, s, sign);
-              } else if (!kInA && !nextInA) { // Pure B-face (v_A × f_B): cycle using B's next map
-                if (mB[0][b] == INVALID_IND) throw std::logic_error("cannot have an B-face if an B-edge has boundary");
-                dartMapAB[0][idx] = toIdx(a, mB[0][b], s, sign);
-              } else { // Product face (e_A × e_B): toggle interleaving, no factor maps needed
-                uint32_t newSigma = sigma ^ 0b11;
-                size_t newS = interleavingIndex(interleavings, newSigma);
-                size_t newSign = !kInA ? sign : (1 - sign);
-                dartMapAB[0][idx] = toIdx(a, b, newS, newSign);
-              }
-            } else { // Higher dimensional twin map: should be an involution
-              uint32_t prefixMask = (1u << k) - 1;
-              size_t iA = popcount(sigma & prefixMask);
-              size_t iB = k - iA;
-              bool prevInA = (k > 0) && ((sigma >> (k - 1)) & 1);
-              // α_k for k > 0: involutions
-              if (kInA == prevInA) {
-                // Same factor for positions k-1 and k
-                if (kInA) {
-                  // Pure A cell
-                  size_t newA = mA[iA][a];
-                  if (newA == INVALID_IND) {
-                    bool isTop = (k == D1 + D2 - 1) && (iA == D1 - 1);
-                    if (isTop) {
-                      dartMapAB[k][idx] = INVALID_IND;
-                    } else {
-                      // Find prev_A(a) by iterating next
-                      size_t prevA = a;
-                      while (mA[0][prevA] != a) {
-                        prevA = mA[0][prevA];
-                      }
-                      if (sign == 0) {
-                        dartMapAB[k][idx] = toIdx(prevA, b, s, 1);
-                      } else {
-                        dartMapAB[k][idx] = toIdx(mA[0][a], b, s, 0);
-                      }
-                    }
-                  } else {
-                    dartMapAB[k][idx] = toIdx(newA, b, s, sign);
-                  }
-                } else {
-                  // Pure B cell
-                  size_t newB = mB[iB][b];
-                  if (newB == INVALID_IND) {
-                    bool isTop = (k == D1 + D2 - 1) && (iB == D2 - 1);
-                    if (isTop) {
-                      dartMapAB[k][idx] = INVALID_IND;
-                    } else {
-                      // Find prev_B(b) by iterating next
-                      size_t prevB = b;
-                      while (mB[0][prevB] != b) {
-                        prevB = mB[0][prevB];
-                      }
-                      if (sign == 0) {
-                        dartMapAB[k][idx] = toIdx(a, prevB, s, 1);
-                      } else {
-                        dartMapAB[k][idx] = toIdx(a, mB[0][b], s, 0);
-                      }
-                    }
-                  } else {
-                    dartMapAB[k][idx] = toIdx(a, newB, s, sign);
-                  }
-                }
-              } else {
-                // Different factors: toggle interleaving bits k-1,k AND flip sign
-                uint32_t toggleMask = (1u << (k - 1)) | (1u << k);
-                uint32_t newSigma = sigma ^ toggleMask;
-                size_t newS = interleavingIndex(interleavings, newSigma);
+  for (size_t D = 0; D < nAB; D++) {
+    { // dartMapAB[0] = next = alpha_1 o alpha_0 (always defined: this never
+      // touches either factor's top operation directly)
+      ProductFlag f = decode(D);
+      bool ok = productApplyAlpha(0, f, mA, nextInvA, mB, nextInvB) &&
+                productApplyAlpha(1, f, mA, nextInvA, mB, nextInvB);
+      if (!ok) throw std::logic_error("productMesh: internal error, next should always be defined");
+      dartMapAB[0][D] = encode(f);
+    }
+    for (size_t k = 1; k < D1 + D2; k++) { // dartMapAB[k] = twin_k = alpha_{k+1} o alpha_0
+      ProductFlag f = decode(D);
+      bool ok = productApplyAlpha(0, f, mA, nextInvA, mB, nextInvB) &&
+                productApplyAlpha(k + 1, f, mA, nextInvA, mB, nextInvB);
+      if (!ok && k + 1 < D1 + D2)
+        throw std::logic_error("productMesh: internal error, interior twin should always be defined");
+      dartMapAB[k][D] = ok ? encode(f) : INVALID_IND;
+    }
+  }
 
-                if (k == D1 + D2 - 1) {
-                  // Top dimension: check boundary
-                  size_t totalA = popcount(sigma);
-                  size_t totalB = (D1 + D2) - totalA;
-                  if (totalA != D1) throw std::logic_error("totalA definitely has to equal D1");
-                  if (totalB != D2) throw std::logic_error("totalA definitely has to equal D2");
-                  bool boundaryA = (totalA == D1) && (mA[D1 - 1][a] == INVALID_IND);
-                  bool boundaryB = (totalB == D2) && (mB[D2 - 1][b] == INVALID_IND);
-                  if (boundaryA || boundaryB) {
-                    dartMapAB[k][idx] = INVALID_IND;
-                  } else {
-                    dartMapAB[k][idx] = toIdx(a, b, newS, 1 - sign);
-                  }
-                } else {
-                  dartMapAB[k][idx] = toIdx(a, b, newS, 1 - sign);
-                }
-              }
-            }
-          }
+  return std::unique_ptr<CombinatorialMap<D1 + D2>>(new CombinatorialMap<D1 + D2>(dartMapAB));
+}
+
+// ---------------------------------------------------------------------------
+// Connect sum of two closed D-dimensional combinatorial maps: remove the
+// D-cell containing dartA from A and the D-cell containing dartB from B, and
+// glue the two exposed boundaries directly to each other, anchored at
+// dartA <-> dartB.
+//
+// The two cells must be:
+//   * fully interior (every facet already glued to a neighbor -- you can't
+//     connect-sum along a cell that is already on the boundary of A or B),
+//   * not glued to themselves along any facet (not supported here), and
+//   * combinatorially compatible: isomorphic as D-cells via an
+//     ORIENTATION-REVERSING correspondence anchored at dartA <-> dartB.
+// Any violation throws std::runtime_error. See findConnectSumAnchor() below
+// for a helper that searches for a compatible anchor pair automatically.
+//
+// Orientation reversal: a D-cell's own darts are permuted by D-1 generators,
+// map[0] ("next") and map[1..D-2] ("twin_1..twin_{D-2}", the interior
+// twins). Every generator except map[0] is an involution, hence its own
+// inverse; map[0] is the only one for which "forward" and "reversed" are
+// different maps. The standard fact for rotation systems / ribbon graphs is
+// that reversing orientation means replacing map[0] by its inverse while
+// leaving the involutions alone -- e.g. in 2D this is exactly "read a face's
+// boundary cycle backwards, keep its edge pairing," which is how connect sum
+// of oriented surfaces is classically built. We verify the anchor choice
+// actually extends to a consistent isomorphism of the whole cell (and thus
+// discover incompatible cells) by propagating it via BFS and checking for
+// contradictions.
+// ---------------------------------------------------------------------------
+
+// Gather the D-cell (top cell) containing a given dart: the orbit under all
+// generators except the top twin, i.e. map[0..D-2].
+template <size_t D>
+std::vector<size_t> connectSumCollectCellDarts(const std::array<std::vector<size_t>, D>& m, size_t start) {
+  std::vector<size_t> result;
+  std::vector<char> visited(m[0].size(), 0);
+  std::vector<size_t> stack{start};
+  visited[start] = 1;
+  while (!stack.empty()) {
+    size_t d = stack.back();
+    stack.pop_back();
+    result.push_back(d);
+    for (size_t i = 0; i + 1 < D; i++) {
+      size_t d2 = m[i][d];
+      if (!visited[d2]) {
+        visited[d2] = 1;
+        stack.push_back(d2);
+      }
+    }
+  }
+  return result;
+}
+
+// One representative dart per top D-cell of M.
+template <size_t D>
+std::vector<size_t> connectSumCellRepresentatives(const std::array<std::vector<size_t>, D>& m) {
+  const size_t n = m[0].size();
+  std::vector<char> visited(n, 0);
+  std::vector<size_t> reps;
+  for (size_t d = 0; d < n; d++) {
+    if (visited[d]) continue;
+    reps.push_back(d);
+    for (size_t c : connectSumCollectCellDarts(m, d)) visited[c] = 1;
+  }
+  return reps;
+}
+
+// Shared core of connectSum(): checks that the D-cells containing dartA and
+// dartB are compatible (fully interior, not self-glued, isomorphic via an
+// orientation-reversing correspondence anchored at dartA <-> dartB), and on
+// success fills cellADarts/cellBDarts/phi (phi : cellADarts -> cellBDarts).
+// If throwOnFailure is true, throws std::runtime_error with a message
+// identifying the problem on any incompatibility, and thus always returns
+// true; if false, returns false quietly instead (used by
+// findConnectSumAnchor's search, which tries many candidate pairs and can't
+// afford to throw on most of them).
+template <size_t D>
+bool connectSumFindGluing(const std::array<std::vector<size_t>, D>& mA, size_t dartA,
+                          const std::array<std::vector<size_t>, D>& mB, size_t dartB, bool throwOnFailure,
+                          std::vector<size_t>& cellADarts, std::vector<size_t>& cellBDarts,
+                          std::vector<size_t>& phi) {
+  auto fail = [&](const char* msg) -> bool {
+    if (throwOnFailure) throw std::runtime_error(std::string("connectSum: ") + msg);
+    return false;
+  };
+
+  const size_t nA = mA[0].size();
+  const size_t nB = mB[0].size();
+  if (dartA >= nA) return fail("dartA is not a valid dart of A");
+  if (dartB >= nB) return fail("dartB is not a valid dart of B");
+
+  cellADarts = connectSumCollectCellDarts(mA, dartA);
+  cellBDarts = connectSumCollectCellDarts(mB, dartB);
+  if (cellADarts.size() != cellBDarts.size())
+    return fail("cells are not compatible (different number of darts)");
+
+  std::vector<char> inCellA(nA, 0);
+  for (size_t d : cellADarts) inCellA[d] = 1;
+  std::vector<char> inCellB(nB, 0);
+  for (size_t d : cellBDarts) inCellB[d] = 1;
+
+  for (size_t d : cellADarts) {
+    size_t partner = mA[D - 1][d];
+    if (partner == INVALID_IND) return fail("cell in A touches a boundary facet, cannot connect-sum along it");
+    if (inCellA[partner]) return fail("cell in A is glued to itself along a facet, which is not supported");
+  }
+  for (size_t d : cellBDarts) {
+    size_t partner = mB[D - 1][d];
+    if (partner == INVALID_IND) return fail("cell in B touches a boundary facet, cannot connect-sum along it");
+    if (inCellB[partner]) return fail("cell in B is glued to itself along a facet, which is not supported");
+  }
+
+  // Build phi : cellADarts -> cellBDarts, anchored at dartA <-> dartB, by
+  // propagating via BFS: phi(mA[0][d]) = nextInvB[phi(d)] (map[0] reversed),
+  // phi(mA[i][d]) = mB[i][phi(d)] for i = 1..D-2 (involutions, unchanged).
+  const std::vector<size_t> nextInvB = productInversePartialInjection(mB[0]);
+
+  phi.assign(nA, INVALID_IND);
+  std::vector<char> visitedA(nA, 0);
+  std::vector<char> usedB(nB, 0);
+  phi[dartA] = dartB;
+  visitedA[dartA] = 1;
+  usedB[dartB] = 1;
+  std::vector<size_t> stack{dartA};
+  while (!stack.empty()) {
+    size_t d = stack.back();
+    stack.pop_back();
+    for (size_t i = 0; i + 1 < D; i++) {
+      size_t d2 = mA[i][d];
+      size_t target = (i == 0) ? nextInvB[phi[d]] : mB[i][phi[d]];
+      if (target >= nB) return fail("cells are not compatible (gluing is not a bijection)");
+      if (!visitedA[d2]) {
+        visitedA[d2] = 1;
+        phi[d2] = target;
+        if (usedB[target]) return fail("cells are not compatible (gluing is not a bijection)");
+        usedB[target] = 1;
+        stack.push_back(d2);
+      } else if (phi[d2] != target) {
+        return fail("cells are not compatible (inconsistent gluing)");
+      }
+    }
+  }
+  for (size_t d : cellBDarts)
+    if (!usedB[d]) return fail("cells are not compatible (gluing does not cover cell in B)");
+
+  return true;
+}
+
+// Search for an anchor pair (dartA in A, dartB in B) for which
+// connectSum(A, dartA, B, dartB) would succeed. Tries every (top cell of A,
+// top cell of B) pair with matching dart counts, and within each such pair,
+// every dart of A's cell against a fixed representative dart of B's cell
+// (which suffices to find any valid orientation-reversing correspondence
+// between the two cells, if one exists, since fixing one side and rotating
+// the other explores every possible relative phase). Returns true and sets
+// outDartA/outDartB on success; returns false (without throwing) if no
+// compatible anchor pair exists anywhere in A x B.
+template <size_t D>
+bool findConnectSumAnchor(const CombinatorialMap<D>& A, const CombinatorialMap<D>& B, size_t& outDartA,
+                          size_t& outDartB) {
+  if (&A == &B) return false; // self connect-sum is not supported
+
+  const auto& mA = A.dartMap;
+  const auto& mB = B.dartMap;
+  std::vector<size_t> repsA = connectSumCellRepresentatives(mA);
+  std::vector<size_t> repsB = connectSumCellRepresentatives(mB);
+  for (size_t ra : repsA) {
+    std::vector<size_t> cellADarts = connectSumCollectCellDarts(mA, ra);
+    for (size_t rb : repsB) {
+      if (connectSumCollectCellDarts(mB, rb).size() != cellADarts.size()) continue;
+      for (size_t da : cellADarts) {
+        std::vector<size_t> tmpA, tmpB, phi;
+        if (connectSumFindGluing(mA, da, mB, rb, /* throwOnFailure = */ false, tmpA, tmpB, phi)) {
+          outDartA = da;
+          outDartB = rb;
+          return true;
         }
       }
     }
   }
+  return false;
+}
 
-  std::cout << " ==== constructed product mesh ==== " << std::endl;
-  std::cout << " == Input A == " << std::endl;
-  for (size_t k = 0; k < A.dartMap.size(); k++) {
-    std::cout << "map[" << k << "] = {";
-    for (size_t iD = 0; iD < A.dartMap[k].size(); iD++) std::cout << " " << A.dartMap[k][iD];
-    std::cout << " }" << std::endl;
+template <size_t D>
+std::unique_ptr<CombinatorialMap<D>> connectSum(const CombinatorialMap<D>& A, size_t dartA,
+                                                const CombinatorialMap<D>& B, size_t dartB) {
+  if (&A == &B)
+    throw std::runtime_error("connectSum: self connect-sum (A and B being the same mesh) is not supported");
+
+  const auto& mA = A.dartMap;
+  const auto& mB = B.dartMap;
+  const size_t nA = mA[0].size();
+  const size_t nB = mB[0].size();
+
+  std::vector<size_t> cellADarts, cellBDarts, phi;
+  connectSumFindGluing(mA, dartA, mB, dartB, /* throwOnFailure = */ true, cellADarts, cellBDarts, phi);
+
+  std::vector<char> inCellA(nA, 0);
+  for (size_t d : cellADarts) inCellA[d] = 1;
+  std::vector<char> inCellB(nB, 0);
+  for (size_t d : cellBDarts) inCellB[d] = 1;
+
+  // Renumber: all of A's darts except cellADarts, then all of B's darts
+  // except cellBDarts.
+  std::vector<size_t> newIdxA(nA, INVALID_IND);
+  std::vector<size_t> newIdxB(nB, INVALID_IND);
+  size_t nextIdx = 0;
+  for (size_t d = 0; d < nA; d++)
+    if (!inCellA[d]) newIdxA[d] = nextIdx++;
+  for (size_t d = 0; d < nB; d++)
+    if (!inCellB[d]) newIdxB[d] = nextIdx++;
+  const size_t nOut = nextIdx;
+
+  std::array<std::vector<size_t>, D> outMap;
+  for (std::vector<size_t>& v : outMap) v.assign(nOut, INVALID_IND);
+
+  // Copy maps[0..D-2] directly: D-cells are closed under these generators,
+  // so surviving darts never reference a removed one through them.
+  for (size_t d = 0; d < nA; d++) {
+    if (inCellA[d]) continue;
+    for (size_t i = 0; i + 1 < D; i++) outMap[i][newIdxA[d]] = newIdxA[mA[i][d]];
   }
-  std::cout << " == Input B == " << std::endl;
-  for (size_t k = 0; k < B.dartMap.size(); k++) {
-    std::cout << "map[" << k << "] = {";
-    for (size_t iD = 0; iD < B.dartMap[k].size(); iD++) std::cout << " " << B.dartMap[k][iD];
-    std::cout << " }" << std::endl;
+  for (size_t d = 0; d < nB; d++) {
+    if (inCellB[d]) continue;
+    for (size_t i = 0; i + 1 < D; i++) outMap[i][newIdxB[d]] = newIdxB[mB[i][d]];
   }
 
-  std::cout << " == Output AB == " << std::endl;
-  std::cout << "         {";
-  for (size_t iD = 0; iD < dartMapAB[0].size(); iD++) std::cout << " " << iD;
-  std::cout << " }" << std::endl;
-  for (size_t k = 0; k < dartMapAB.size(); k++) {
-    std::cout << "map[" << k << "] = {";
-    for (size_t iD = 0; iD < dartMapAB[k].size(); iD++) std::cout << " " << dartMapAB[k][iD];
-    std::cout << " }" << std::endl;
-    if (k == 0) {
-      std::cout << " > orbits";
-      std::vector<char> visited(dartMapAB[0].size(), false);
-      for (size_t j = 0; j < visited.size(); j++) {
-        if (visited[j]) continue;
-        std::cout << " (" << j;
-        size_t iDart = dartMapAB[0][j];
-        visited[iDart] = true;
-        while (iDart != j) {
-          std::cout << " " << iDart;
-          iDart = dartMapAB[0][iDart];
-          visited[iDart] = true;
-        }
-        std::cout << ")";
-      }
-      std::cout << std::endl;
-    }
+  // Copy the top twin for darts untouched by the surgery (both sides).
+  for (size_t d = 0; d < nA; d++) {
+    if (inCellA[d]) continue;
+    size_t partner = mA[D - 1][d];
+    outMap[D - 1][newIdxA[d]] = (partner == INVALID_IND || inCellA[partner]) ? INVALID_IND : newIdxA[partner];
+  }
+  for (size_t d = 0; d < nB; d++) {
+    if (inCellB[d]) continue;
+    size_t partner = mB[D - 1][d];
+    outMap[D - 1][newIdxB[d]] = (partner == INVALID_IND || inCellB[partner]) ? INVALID_IND : newIdxB[partner];
+  }
+  // Rewire the darts that were glued to the removed cells directly to each
+  // other, following phi. (dOut, eOut are guaranteed to survive: interior
+  // and non-self-gluing were checked above.)
+  for (size_t p : cellADarts) {
+    size_t dOut = mA[D - 1][p];
+    size_t eOut = mB[D - 1][phi[p]];
+    outMap[D - 1][newIdxA[dOut]] = newIdxB[eOut];
+    outMap[D - 1][newIdxB[eOut]] = newIdxA[dOut];
   }
 
-  std::unique_ptr<CombinatorialMap<D1 + D2>> result(new CombinatorialMap<D1 + D2>(dartMapAB));
-  // // adjust cell indices
-  // for (size_t k = 0; k <= D1 + D2; k++) {
-  //   std::vector<size_t> dCellArr(result->nDarts());
-  //   std::vector<size_t> dCellSgn(result->nDarts());
-  //   std::vector<size_t> cDartArr(result->nCells(k));
-  //   for (size_t iDart = 0; iDart < nDarts(); iDart++) {
-  //     size_t a, b, s, sign;
-  //     std::tie(a, b, s, sign) = fromIdx(iDart);
-  //   }
-  // }
-
-  return std::move(result);
+  return std::unique_ptr<CombinatorialMap<D>>(new CombinatorialMap<D>(outMap));
 }
 
 namespace unionfind {

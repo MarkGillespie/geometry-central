@@ -383,6 +383,16 @@ protected:
   template <size_t D1, size_t D2>
   friend std::unique_ptr<CombinatorialMap<D1 + D2>> productMesh(const CombinatorialMap<D1>& A,
                                                                 const CombinatorialMap<D2>& B);
+
+  // Also allow the connect sum constructor direct access
+  template <size_t D1>
+  friend std::unique_ptr<CombinatorialMap<D1>> connectSum(const CombinatorialMap<D1>& A, size_t dartA,
+                                                          const CombinatorialMap<D1>& B, size_t dartB);
+
+  // Also allow the connect sum anchor search direct access
+  template <size_t D1>
+  friend bool findConnectSumAnchor(const CombinatorialMap<D1>& A, const CombinatorialMap<D1>& B, size_t& outDartA,
+                                   size_t& outDartB);
 };
 
 template <size_t D>
@@ -391,6 +401,21 @@ std::vector<Dart<D>> incidenceNeighboringDarts(Dart<D> d, size_t k1, size_t k2, 
 // Construct the product mesh
 template <size_t D1, size_t D2>
 std::unique_ptr<CombinatorialMap<D1 + D2>> productMesh(const CombinatorialMap<D1>& A, const CombinatorialMap<D2>& B);
+
+// Construct the connect sum of A and B along the D-cells containing dartA and dartB respectively. Both cells must be
+// fully interior (no boundary facets) and combinatorially compatible (isomorphic, via an orientation-reversing
+// correspondence anchored at dartA <-> dartB); throws std::runtime_error if they are not.
+template <size_t D>
+std::unique_ptr<CombinatorialMap<D>> connectSum(const CombinatorialMap<D>& A, size_t dartA,
+                                                const CombinatorialMap<D>& B, size_t dartB);
+
+// Search for a pair of anchor darts (dartA in A, dartB in B) for which connectSum(A, dartA, B, dartB) would succeed.
+// Tries every pair of top cells (one from A, one from B) with matching dart counts, and every relative rotation
+// within each such pair. Returns true and sets outDartA/outDartB on success; returns false (without throwing) if no
+// compatible anchor pair exists anywhere in A x B.
+template <size_t D>
+bool findConnectSumAnchor(const CombinatorialMap<D>& A, const CombinatorialMap<D>& B, size_t& outDartA,
+                          size_t& outDartB);
 
 // helpers
 namespace unionfind {
