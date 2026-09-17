@@ -381,528 +381,179 @@ inline bool IncidenceRangeF<k1, k2, D>::elementOkay(const CombinatorialMap<D>& m
 
 } // namespace combinatorial_map
 
+// ==========================================================
+// === Customization points for MeshData<Cell<k,D>, T>, MeshData<Dart<D>, T>,
+// === and MeshData<Incidence<k1,k2,D>, T>.
+//
+// element.h declares nElements<E>, elementCapacity<E>, dataIndexOfElement<E>,
+// ElementSetType<E>, iterateElements<E>, getExpandCallbackList<E>, and
+// getPermuteCallbackList<E> as the customization points MeshData<E,T> needs;
+// every element type must fully specialize all of them for every concrete
+// type it wants MeshData to support. element.h is shared with every other
+// module in geometry-central and is deliberately left untouched here, and
+// C++ does not allow *partial* specialization of a function template, so
+// there is no way to write "one specialization covers Cell<k, D> for every
+// k and D" directly from this file either -- the three macros below
+// generate one full specialization set per concrete (k, D) / D / (k1, k2,
+// D) instead (so a human only has to write and read one short invocation
+// per case, not a ~10-line hand-written body), and are invoked below for
+// every combination up to the bounds noted at each list. Extend a bound by
+// adding more invocation lines in the same pattern if a higher-dimensional
+// map needs it.
+// ==========================================================
 
-template <>
-struct ElementSetType<combinatorial_map::Dart<2>> {
-  typedef combinatorial_map::DartSet<2> type;
-};
-template <>
-struct ElementSetType<combinatorial_map::Dart<3>> {
-  typedef combinatorial_map::DartSet<3> type;
-};
-template <>
-struct ElementSetType<combinatorial_map::Vertex<2>> {
-  typedef combinatorial_map::VertexSet<2> type;
-};
-template <>
-struct ElementSetType<combinatorial_map::Vertex<3>> {
-  typedef combinatorial_map::VertexSet<3> type;
-};
-template <>
-struct ElementSetType<combinatorial_map::Edge<2>> {
-  typedef combinatorial_map::EdgeSet<2> type;
-};
-template <>
-struct ElementSetType<combinatorial_map::Edge<3>> {
-  typedef combinatorial_map::EdgeSet<3> type;
-};
-template <>
-struct ElementSetType<combinatorial_map::Face<2>> {
-  typedef combinatorial_map::FaceSet<2> type;
-};
-template <>
-struct ElementSetType<combinatorial_map::Face<3>> {
-  typedef combinatorial_map::FaceSet<3> type;
-};
-template <>
-struct ElementSetType<combinatorial_map::Cell<3, 3>> {
-  typedef combinatorial_map::CellSet<3, 3> type;
-};
+#define GC_CM_SPECIALIZE_CELL(k, D) \
+  template <> \
+  struct ElementSetType<combinatorial_map::Cell<k, D>> { \
+    typedef combinatorial_map::CellSet<k, D> type; \
+  }; \
+  template <> \
+  inline size_t nElements<combinatorial_map::Cell<k, D>>(combinatorial_map::CombinatorialMap<D>* mesh) { \
+    return mesh->template nCells<k>(); \
+  } \
+  template <> \
+  inline size_t elementCapacity<combinatorial_map::Cell<k, D>>(combinatorial_map::CombinatorialMap<D>* mesh) { \
+    return mesh->template nCellsCapacity<k>(); \
+  } \
+  template <> \
+  inline size_t dataIndexOfElement<combinatorial_map::Cell<k, D>>(combinatorial_map::CombinatorialMap<D>* mesh, \
+                                                                  combinatorial_map::Cell<k, D> e) { \
+    (void)mesh; \
+    return e.getIndex(); \
+  } \
+  template <> \
+  inline combinatorial_map::CellSet<k, D> iterateElements<combinatorial_map::Cell<k, D>>( \
+      combinatorial_map::CombinatorialMap<D>* mesh) { \
+    return mesh->template cells<k>(); \
+  } \
+  template <> \
+  inline std::list<std::function<void(size_t)>>& getExpandCallbackList<combinatorial_map::Cell<k, D>>( \
+      combinatorial_map::CombinatorialMap<D>* mesh) { \
+    return mesh->cellExpandCallbackList[k]; \
+  } \
+  template <> \
+  inline std::list<std::function<void(const std::vector<size_t>&)>>& \
+  getPermuteCallbackList<combinatorial_map::Cell<k, D>>(combinatorial_map::CombinatorialMap<D>* mesh) { \
+    return mesh->cellPermuteCallbackList[k]; \
+  }
 
-template <>
-inline size_t nElements<combinatorial_map::Vertex<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->nVertices();
-}
-template <>
-inline size_t nElements<combinatorial_map::Vertex<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->nVertices();
-}
-template <>
-inline size_t nElements<combinatorial_map::Edge<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->nEdges();
-}
-template <>
-inline size_t nElements<combinatorial_map::Edge<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->nEdges();
-}
-template <>
-inline size_t nElements<combinatorial_map::Face<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->nFaces();
-}
-template <>
-inline size_t nElements<combinatorial_map::Face<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->nFaces();
-}
-template <>
-inline size_t nElements<combinatorial_map::Cell<3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->nCells<3>();
-}
-template <>
-inline size_t nElements<combinatorial_map::Dart<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->nDarts();
-}
-template <>
-inline size_t nElements<combinatorial_map::Dart<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->nDarts();
-}
-template <>
-inline size_t nElements<combinatorial_map::Incidence<0, 1, 2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  mesh->ensureHaveIncidences(0, 1);
-  return mesh->nIncidences<0, 1>();
-}
-template <>
-inline size_t nElements<combinatorial_map::Incidence<0, 2, 2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  mesh->ensureHaveIncidences(0, 2);
-  return mesh->nIncidences<0, 2>();
-}
-template <>
-inline size_t nElements<combinatorial_map::Incidence<1, 2, 2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  mesh->ensureHaveIncidences(1, 2);
-  return mesh->nIncidences<1, 2>();
-}
-template <>
-inline size_t nElements<combinatorial_map::Incidence<0, 1, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(0, 1);
-  return mesh->nIncidences<0, 1>();
-}
-template <>
-inline size_t nElements<combinatorial_map::Incidence<0, 2, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(0, 2);
-  return mesh->nIncidences<0, 2>();
-}
-template <>
-inline size_t nElements<combinatorial_map::Incidence<1, 2, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(1, 2);
-  return mesh->nIncidences<1, 2>();
-}
-template <>
-inline size_t nElements<combinatorial_map::Incidence<0, 3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(0, 3);
-  return mesh->nIncidences<0, 3>();
-}
-template <>
-inline size_t nElements<combinatorial_map::Incidence<1, 3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(1, 3);
-  return mesh->nIncidences<1, 3>();
-}
-template <>
-inline size_t nElements<combinatorial_map::Incidence<2, 3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(2, 3);
-  return mesh->nIncidences<2, 3>();
-}
+#define GC_CM_SPECIALIZE_DART(D) \
+  template <> \
+  struct ElementSetType<combinatorial_map::Dart<D>> { \
+    typedef combinatorial_map::DartSet<D> type; \
+  }; \
+  template <> \
+  inline size_t nElements<combinatorial_map::Dart<D>>(combinatorial_map::CombinatorialMap<D>* mesh) { \
+    return mesh->nDarts(); \
+  } \
+  template <> \
+  inline size_t elementCapacity<combinatorial_map::Dart<D>>(combinatorial_map::CombinatorialMap<D>* mesh) { \
+    return mesh->nDartsCapacity(); \
+  } \
+  template <> \
+  inline size_t dataIndexOfElement<combinatorial_map::Dart<D>>(combinatorial_map::CombinatorialMap<D>* mesh, \
+                                                               combinatorial_map::Dart<D> e) { \
+    (void)mesh; \
+    return e.getIndex(); \
+  } \
+  template <> \
+  inline combinatorial_map::DartSet<D> iterateElements<combinatorial_map::Dart<D>>( \
+      combinatorial_map::CombinatorialMap<D>* mesh) { \
+    return mesh->darts(); \
+  } \
+  template <> \
+  inline std::list<std::function<void(size_t)>>& getExpandCallbackList<combinatorial_map::Dart<D>>( \
+      combinatorial_map::CombinatorialMap<D>* mesh) { \
+    return mesh->dartExpandCallbackList; \
+  } \
+  template <> \
+  inline std::list<std::function<void(const std::vector<size_t>&)>>& \
+  getPermuteCallbackList<combinatorial_map::Dart<D>>(combinatorial_map::CombinatorialMap<D>* mesh) { \
+    return mesh->dartPermuteCallbackList; \
+  }
 
-template <>
-inline size_t elementCapacity<combinatorial_map::Vertex<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->nVerticesCapacity();
-}
-template <>
-inline size_t elementCapacity<combinatorial_map::Vertex<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->nVerticesCapacity();
-}
-template <>
-inline size_t elementCapacity<combinatorial_map::Edge<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->nEdgesCapacity();
-}
-template <>
-inline size_t elementCapacity<combinatorial_map::Edge<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->nEdgesCapacity();
-}
-template <>
-inline size_t elementCapacity<combinatorial_map::Face<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->nFacesCapacity();
-}
-template <>
-inline size_t elementCapacity<combinatorial_map::Face<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->nFacesCapacity();
-}
-template <>
-inline size_t elementCapacity<combinatorial_map::Cell<3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->nCellsCapacity<3>();
-}
-template <>
-inline size_t elementCapacity<combinatorial_map::Dart<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->nDartsCapacity();
-}
-template <>
-inline size_t elementCapacity<combinatorial_map::Dart<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->nDartsCapacity();
-}
+#define GC_CM_SPECIALIZE_INCIDENCE(k1, k2, D) \
+  template <> \
+  struct ElementSetType<combinatorial_map::Incidence<k1, k2, D>> { \
+    typedef combinatorial_map::IncidenceSet<k1, k2, D> type; \
+  }; \
+  template <> \
+  inline size_t nElements<combinatorial_map::Incidence<k1, k2, D>>(combinatorial_map::CombinatorialMap<D>* mesh) { \
+    mesh->ensureHaveIncidences(k1, k2); \
+    return mesh->template nIncidences<k1, k2>(); \
+  } \
+  template <> \
+  inline size_t elementCapacity<combinatorial_map::Incidence<k1, k2, D>>( \
+      combinatorial_map::CombinatorialMap<D>* mesh) { \
+    mesh->ensureHaveIncidences(k1, k2); \
+    return mesh->template nIncidencesCapacity<k1, k2>(); \
+  } \
+  template <> \
+  inline size_t dataIndexOfElement<combinatorial_map::Incidence<k1, k2, D>>( \
+      combinatorial_map::CombinatorialMap<D>* mesh, combinatorial_map::Incidence<k1, k2, D> e) { \
+    (void)mesh; \
+    return e.getIndex(); \
+  } \
+  template <> \
+  inline combinatorial_map::IncidenceSet<k1, k2, D> iterateElements<combinatorial_map::Incidence<k1, k2, D>>( \
+      combinatorial_map::CombinatorialMap<D>* mesh) { \
+    mesh->ensureHaveIncidences(k1, k2); \
+    return mesh->template incidences<k1, k2>(); \
+  } \
+  template <> \
+  inline std::list<std::function<void(size_t)>>& getExpandCallbackList<combinatorial_map::Incidence<k1, k2, D>>( \
+      combinatorial_map::CombinatorialMap<D>* mesh) { \
+    mesh->ensureHaveIncidences(k1, k2); \
+    return mesh->incidenceExpandCallbackList[std::make_pair((size_t)k1, (size_t)k2)]; \
+  } \
+  template <> \
+  inline std::list<std::function<void(const std::vector<size_t>&)>>& \
+  getPermuteCallbackList<combinatorial_map::Incidence<k1, k2, D>>(combinatorial_map::CombinatorialMap<D>* mesh) { \
+    mesh->ensureHaveIncidences(k1, k2); \
+    return mesh->incidencePermuteCallbackList[std::make_pair((size_t)k1, (size_t)k2)]; \
+  }
 
+// --- Cell<k, D> for 0 <= k <= D <= 10 ---
+GC_CM_SPECIALIZE_CELL(0, 0)
+GC_CM_SPECIALIZE_CELL(0, 1) GC_CM_SPECIALIZE_CELL(1, 1)
+GC_CM_SPECIALIZE_CELL(0, 2) GC_CM_SPECIALIZE_CELL(1, 2) GC_CM_SPECIALIZE_CELL(2, 2)
+GC_CM_SPECIALIZE_CELL(0, 3) GC_CM_SPECIALIZE_CELL(1, 3) GC_CM_SPECIALIZE_CELL(2, 3) GC_CM_SPECIALIZE_CELL(3, 3)
+GC_CM_SPECIALIZE_CELL(0, 4) GC_CM_SPECIALIZE_CELL(1, 4) GC_CM_SPECIALIZE_CELL(2, 4) GC_CM_SPECIALIZE_CELL(3, 4) GC_CM_SPECIALIZE_CELL(4, 4)
+GC_CM_SPECIALIZE_CELL(0, 5) GC_CM_SPECIALIZE_CELL(1, 5) GC_CM_SPECIALIZE_CELL(2, 5) GC_CM_SPECIALIZE_CELL(3, 5) GC_CM_SPECIALIZE_CELL(4, 5) GC_CM_SPECIALIZE_CELL(5, 5)
+GC_CM_SPECIALIZE_CELL(0, 6) GC_CM_SPECIALIZE_CELL(1, 6) GC_CM_SPECIALIZE_CELL(2, 6) GC_CM_SPECIALIZE_CELL(3, 6) GC_CM_SPECIALIZE_CELL(4, 6) GC_CM_SPECIALIZE_CELL(5, 6) GC_CM_SPECIALIZE_CELL(6, 6)
+GC_CM_SPECIALIZE_CELL(0, 7) GC_CM_SPECIALIZE_CELL(1, 7) GC_CM_SPECIALIZE_CELL(2, 7) GC_CM_SPECIALIZE_CELL(3, 7) GC_CM_SPECIALIZE_CELL(4, 7) GC_CM_SPECIALIZE_CELL(5, 7) GC_CM_SPECIALIZE_CELL(6, 7) GC_CM_SPECIALIZE_CELL(7, 7)
+GC_CM_SPECIALIZE_CELL(0, 8) GC_CM_SPECIALIZE_CELL(1, 8) GC_CM_SPECIALIZE_CELL(2, 8) GC_CM_SPECIALIZE_CELL(3, 8) GC_CM_SPECIALIZE_CELL(4, 8) GC_CM_SPECIALIZE_CELL(5, 8) GC_CM_SPECIALIZE_CELL(6, 8) GC_CM_SPECIALIZE_CELL(7, 8) GC_CM_SPECIALIZE_CELL(8, 8)
+GC_CM_SPECIALIZE_CELL(0, 9) GC_CM_SPECIALIZE_CELL(1, 9) GC_CM_SPECIALIZE_CELL(2, 9) GC_CM_SPECIALIZE_CELL(3, 9) GC_CM_SPECIALIZE_CELL(4, 9) GC_CM_SPECIALIZE_CELL(5, 9) GC_CM_SPECIALIZE_CELL(6, 9) GC_CM_SPECIALIZE_CELL(7, 9) GC_CM_SPECIALIZE_CELL(8, 9) GC_CM_SPECIALIZE_CELL(9, 9)
+GC_CM_SPECIALIZE_CELL(0, 10) GC_CM_SPECIALIZE_CELL(1, 10) GC_CM_SPECIALIZE_CELL(2, 10) GC_CM_SPECIALIZE_CELL(3, 10) GC_CM_SPECIALIZE_CELL(4, 10) GC_CM_SPECIALIZE_CELL(5, 10) GC_CM_SPECIALIZE_CELL(6, 10) GC_CM_SPECIALIZE_CELL(7, 10) GC_CM_SPECIALIZE_CELL(8, 10) GC_CM_SPECIALIZE_CELL(9, 10) GC_CM_SPECIALIZE_CELL(10, 10)
 
-template <>
-inline size_t elementCapacity<combinatorial_map::Incidence<0, 1, 2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  mesh->ensureHaveIncidences(0, 1);
-  return mesh->nIncidencesCapacity<0, 1>();
-}
-template <>
-inline size_t elementCapacity<combinatorial_map::Incidence<0, 2, 2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  mesh->ensureHaveIncidences(0, 2);
-  return mesh->nIncidencesCapacity<0, 2>();
-}
-template <>
-inline size_t elementCapacity<combinatorial_map::Incidence<1, 2, 2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  mesh->ensureHaveIncidences(1, 2);
-  return mesh->nIncidencesCapacity<1, 2>();
-}
-template <>
-inline size_t elementCapacity<combinatorial_map::Incidence<0, 1, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(0, 1);
-  return mesh->nIncidencesCapacity<0, 1>();
-}
-template <>
-inline size_t elementCapacity<combinatorial_map::Incidence<0, 2, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(0, 2);
-  return mesh->nIncidencesCapacity<0, 2>();
-}
-template <>
-inline size_t elementCapacity<combinatorial_map::Incidence<1, 2, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(1, 2);
-  return mesh->nIncidencesCapacity<1, 2>();
-}
-template <>
-inline size_t elementCapacity<combinatorial_map::Incidence<0, 3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(0, 3);
-  return mesh->nIncidencesCapacity<0, 3>();
-}
-template <>
-inline size_t elementCapacity<combinatorial_map::Incidence<1, 3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(1, 3);
-  return mesh->nIncidencesCapacity<1, 3>();
-}
-template <>
-inline size_t elementCapacity<combinatorial_map::Incidence<2, 3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(2, 3);
-  return mesh->nIncidencesCapacity<2, 3>();
-}
+// --- Dart<D> for 0 <= D <= 10 ---
+GC_CM_SPECIALIZE_DART(0) GC_CM_SPECIALIZE_DART(1) GC_CM_SPECIALIZE_DART(2) GC_CM_SPECIALIZE_DART(3) GC_CM_SPECIALIZE_DART(4) GC_CM_SPECIALIZE_DART(5) GC_CM_SPECIALIZE_DART(6) GC_CM_SPECIALIZE_DART(7) GC_CM_SPECIALIZE_DART(8) GC_CM_SPECIALIZE_DART(9) GC_CM_SPECIALIZE_DART(10)
 
-template <>
-inline size_t dataIndexOfElement<combinatorial_map::Vertex<2>>(combinatorial_map::CombinatorialMap<2>* mesh,
-                                                               combinatorial_map::Vertex<2> e) {
-  (void)mesh; // tell compiler not to complain that mesh is unused
-  return e.getIndex();
-}
-template <>
-inline size_t dataIndexOfElement<combinatorial_map::Vertex<3>>(combinatorial_map::CombinatorialMap<3>* mesh,
-                                                               combinatorial_map::Vertex<3> e) {
-  (void)mesh; // tell compiler not to complain that mesh is unused
-  return e.getIndex();
-}
-template <>
-inline size_t dataIndexOfElement<combinatorial_map::Edge<2>>(combinatorial_map::CombinatorialMap<2>* mesh,
-                                                             combinatorial_map::Edge<2> e) {
-  (void)mesh; // tell compiler not to complain that mesh is unused
-  return e.getIndex();
-}
-template <>
-inline size_t dataIndexOfElement<combinatorial_map::Edge<3>>(combinatorial_map::CombinatorialMap<3>* mesh,
-                                                             combinatorial_map::Edge<3> e) {
-  (void)mesh; // tell compiler not to complain that mesh is unused
-  return e.getIndex();
-}
-template <>
-inline size_t dataIndexOfElement<combinatorial_map::Face<2>>(combinatorial_map::CombinatorialMap<2>* mesh,
-                                                             combinatorial_map::Face<2> e) {
-  (void)mesh; // tell compiler not to complain that mesh is unused
-  return e.getIndex();
-}
-template <>
-inline size_t dataIndexOfElement<combinatorial_map::Face<3>>(combinatorial_map::CombinatorialMap<3>* mesh,
-                                                             combinatorial_map::Face<3> e) {
-  (void)mesh; // tell compiler not to complain that mesh is unused
-  return e.getIndex();
-}
-template <>
-inline size_t dataIndexOfElement<combinatorial_map::Cell<3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh,
-                                                                combinatorial_map::Cell<3, 3> e) {
-  (void)mesh; // tell compiler not to complain that mesh is unused
-  return e.getIndex();
-}
-template <>
-inline size_t dataIndexOfElement<combinatorial_map::Dart<2>>(combinatorial_map::CombinatorialMap<2>* mesh,
-                                                             combinatorial_map::Dart<2> e) {
-  (void)mesh; // tell compiler not to complain that mesh is unused
-  return e.getIndex();
-}
-template <>
-inline size_t dataIndexOfElement<combinatorial_map::Dart<3>>(combinatorial_map::CombinatorialMap<3>* mesh,
-                                                             combinatorial_map::Dart<3> e) {
-  (void)mesh; // tell compiler not to complain that mesh is unused
-  return e.getIndex();
-}
-template <>
-inline size_t dataIndexOfElement<combinatorial_map::Incidence<0, 1, 2>>(combinatorial_map::CombinatorialMap<2>* mesh,
-                                                                        combinatorial_map::Incidence<0, 1, 2> e) {
-  (void)mesh; // tell compiler not to complain that mesh is unused
-  return e.getIndex();
-}
-template <>
-inline size_t dataIndexOfElement<combinatorial_map::Incidence<0, 2, 2>>(combinatorial_map::CombinatorialMap<2>* mesh,
-                                                                        combinatorial_map::Incidence<0, 2, 2> e) {
-  (void)mesh; // tell compiler not to complain that mesh is unused
-  return e.getIndex();
-}
-template <>
-inline size_t dataIndexOfElement<combinatorial_map::Incidence<1, 2, 2>>(combinatorial_map::CombinatorialMap<2>* mesh,
-                                                                        combinatorial_map::Incidence<1, 2, 2> e) {
-  (void)mesh; // tell compiler not to complain that mesh is unused
-  return e.getIndex();
-}
-template <>
-inline size_t dataIndexOfElement<combinatorial_map::Incidence<0, 1, 3>>(combinatorial_map::CombinatorialMap<3>* mesh,
-                                                                        combinatorial_map::Incidence<0, 1, 3> e) {
-  (void)mesh; // tell compiler not to complain that mesh is unused
-  return e.getIndex();
-}
-template <>
-inline size_t dataIndexOfElement<combinatorial_map::Incidence<0, 2, 3>>(combinatorial_map::CombinatorialMap<3>* mesh,
-                                                                        combinatorial_map::Incidence<0, 2, 3> e) {
-  (void)mesh; // tell compiler not to complain that mesh is unused
-  return e.getIndex();
-}
-template <>
-inline size_t dataIndexOfElement<combinatorial_map::Incidence<1, 2, 3>>(combinatorial_map::CombinatorialMap<3>* mesh,
-                                                                        combinatorial_map::Incidence<1, 2, 3> e) {
-  (void)mesh; // tell compiler not to complain that mesh is unused
-  return e.getIndex();
-}
-template <>
-inline size_t dataIndexOfElement<combinatorial_map::Incidence<0, 3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh,
-                                                                        combinatorial_map::Incidence<0, 3, 3> e) {
-  (void)mesh; // tell compiler not to complain that mesh is unused
-  return e.getIndex();
-}
-template <>
-inline size_t dataIndexOfElement<combinatorial_map::Incidence<1, 3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh,
-                                                                        combinatorial_map::Incidence<1, 3, 3> e) {
-  (void)mesh; // tell compiler not to complain that mesh is unused
-  return e.getIndex();
-}
-template <>
-inline size_t dataIndexOfElement<combinatorial_map::Incidence<2, 3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh,
-                                                                        combinatorial_map::Incidence<2, 3, 3> e) {
-  (void)mesh; // tell compiler not to complain that mesh is unused
-  return e.getIndex();
-}
+// --- Incidence<k1, k2, D> for 0 <= k1 < k2 <= D <= 6 ---
+GC_CM_SPECIALIZE_INCIDENCE(0, 1, 1)
+GC_CM_SPECIALIZE_INCIDENCE(0, 1, 2)
+GC_CM_SPECIALIZE_INCIDENCE(0, 2, 2) GC_CM_SPECIALIZE_INCIDENCE(1, 2, 2)
+GC_CM_SPECIALIZE_INCIDENCE(0, 1, 3)
+GC_CM_SPECIALIZE_INCIDENCE(0, 2, 3) GC_CM_SPECIALIZE_INCIDENCE(1, 2, 3)
+GC_CM_SPECIALIZE_INCIDENCE(0, 3, 3) GC_CM_SPECIALIZE_INCIDENCE(1, 3, 3) GC_CM_SPECIALIZE_INCIDENCE(2, 3, 3)
+GC_CM_SPECIALIZE_INCIDENCE(0, 1, 4)
+GC_CM_SPECIALIZE_INCIDENCE(0, 2, 4) GC_CM_SPECIALIZE_INCIDENCE(1, 2, 4)
+GC_CM_SPECIALIZE_INCIDENCE(0, 3, 4) GC_CM_SPECIALIZE_INCIDENCE(1, 3, 4) GC_CM_SPECIALIZE_INCIDENCE(2, 3, 4)
+GC_CM_SPECIALIZE_INCIDENCE(0, 4, 4) GC_CM_SPECIALIZE_INCIDENCE(1, 4, 4) GC_CM_SPECIALIZE_INCIDENCE(2, 4, 4) GC_CM_SPECIALIZE_INCIDENCE(3, 4, 4)
+GC_CM_SPECIALIZE_INCIDENCE(0, 1, 5)
+GC_CM_SPECIALIZE_INCIDENCE(0, 2, 5) GC_CM_SPECIALIZE_INCIDENCE(1, 2, 5)
+GC_CM_SPECIALIZE_INCIDENCE(0, 3, 5) GC_CM_SPECIALIZE_INCIDENCE(1, 3, 5) GC_CM_SPECIALIZE_INCIDENCE(2, 3, 5)
+GC_CM_SPECIALIZE_INCIDENCE(0, 4, 5) GC_CM_SPECIALIZE_INCIDENCE(1, 4, 5) GC_CM_SPECIALIZE_INCIDENCE(2, 4, 5) GC_CM_SPECIALIZE_INCIDENCE(3, 4, 5)
+GC_CM_SPECIALIZE_INCIDENCE(0, 5, 5) GC_CM_SPECIALIZE_INCIDENCE(1, 5, 5) GC_CM_SPECIALIZE_INCIDENCE(2, 5, 5) GC_CM_SPECIALIZE_INCIDENCE(3, 5, 5) GC_CM_SPECIALIZE_INCIDENCE(4, 5, 5)
+GC_CM_SPECIALIZE_INCIDENCE(0, 1, 6)
+GC_CM_SPECIALIZE_INCIDENCE(0, 2, 6) GC_CM_SPECIALIZE_INCIDENCE(1, 2, 6)
+GC_CM_SPECIALIZE_INCIDENCE(0, 3, 6) GC_CM_SPECIALIZE_INCIDENCE(1, 3, 6) GC_CM_SPECIALIZE_INCIDENCE(2, 3, 6)
+GC_CM_SPECIALIZE_INCIDENCE(0, 4, 6) GC_CM_SPECIALIZE_INCIDENCE(1, 4, 6) GC_CM_SPECIALIZE_INCIDENCE(2, 4, 6) GC_CM_SPECIALIZE_INCIDENCE(3, 4, 6)
+GC_CM_SPECIALIZE_INCIDENCE(0, 5, 6) GC_CM_SPECIALIZE_INCIDENCE(1, 5, 6) GC_CM_SPECIALIZE_INCIDENCE(2, 5, 6) GC_CM_SPECIALIZE_INCIDENCE(3, 5, 6) GC_CM_SPECIALIZE_INCIDENCE(4, 5, 6)
+GC_CM_SPECIALIZE_INCIDENCE(0, 6, 6) GC_CM_SPECIALIZE_INCIDENCE(1, 6, 6) GC_CM_SPECIALIZE_INCIDENCE(2, 6, 6) GC_CM_SPECIALIZE_INCIDENCE(3, 6, 6) GC_CM_SPECIALIZE_INCIDENCE(4, 6, 6) GC_CM_SPECIALIZE_INCIDENCE(5, 6, 6)
 
-
-template <>
-inline combinatorial_map::DartSet<2>
-iterateElements<combinatorial_map::Dart<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->darts();
-}
-template <>
-inline combinatorial_map::DartSet<3>
-iterateElements<combinatorial_map::Dart<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->darts();
-}
-template <>
-inline combinatorial_map::VertexSet<2>
-iterateElements<combinatorial_map::Vertex<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->vertices();
-}
-template <>
-inline combinatorial_map::VertexSet<3>
-iterateElements<combinatorial_map::Vertex<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->vertices();
-}
-template <>
-inline combinatorial_map::EdgeSet<2>
-iterateElements<combinatorial_map::Edge<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->edges();
-}
-template <>
-inline combinatorial_map::EdgeSet<3>
-iterateElements<combinatorial_map::Edge<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->edges();
-}
-template <>
-inline combinatorial_map::FaceSet<2>
-iterateElements<combinatorial_map::Face<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->faces();
-}
-template <>
-inline combinatorial_map::FaceSet<3>
-iterateElements<combinatorial_map::Face<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->faces();
-}
-template <>
-inline combinatorial_map::CellSet<3, 3>
-iterateElements<combinatorial_map::Cell<3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->cells<3>();
-}
-
-template <>
-inline std::list<std::function<void(size_t)>>&
-getExpandCallbackList<combinatorial_map::Vertex<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->cellExpandCallbackList[0];
-}
-template <>
-inline std::list<std::function<void(size_t)>>&
-getExpandCallbackList<combinatorial_map::Vertex<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->cellExpandCallbackList[0];
-}
-template <>
-inline std::list<std::function<void(size_t)>>&
-getExpandCallbackList<combinatorial_map::Edge<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->cellExpandCallbackList[1];
-}
-template <>
-inline std::list<std::function<void(size_t)>>&
-getExpandCallbackList<combinatorial_map::Edge<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->cellExpandCallbackList[1];
-}
-template <>
-inline std::list<std::function<void(size_t)>>&
-getExpandCallbackList<combinatorial_map::Face<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->cellExpandCallbackList[2];
-}
-template <>
-inline std::list<std::function<void(size_t)>>&
-getExpandCallbackList<combinatorial_map::Face<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->cellExpandCallbackList[2];
-}
-template <>
-inline std::list<std::function<void(size_t)>>&
-getExpandCallbackList<combinatorial_map::Cell<3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->cellExpandCallbackList[3];
-}
-template <>
-inline std::list<std::function<void(size_t)>>&
-getExpandCallbackList<combinatorial_map::Dart<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->dartExpandCallbackList;
-}
-template <>
-inline std::list<std::function<void(size_t)>>&
-getExpandCallbackList<combinatorial_map::Dart<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->dartExpandCallbackList;
-}
-
-template <>
-inline std::list<std::function<void(const std::vector<size_t>&)>>&
-getPermuteCallbackList<combinatorial_map::Vertex<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->cellPermuteCallbackList[0];
-}
-template <>
-inline std::list<std::function<void(const std::vector<size_t>&)>>&
-getPermuteCallbackList<combinatorial_map::Vertex<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->cellPermuteCallbackList[0];
-}
-template <>
-inline std::list<std::function<void(const std::vector<size_t>&)>>&
-getPermuteCallbackList<combinatorial_map::Edge<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->cellPermuteCallbackList[1];
-}
-template <>
-inline std::list<std::function<void(const std::vector<size_t>&)>>&
-getPermuteCallbackList<combinatorial_map::Edge<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->cellPermuteCallbackList[1];
-}
-template <>
-inline std::list<std::function<void(const std::vector<size_t>&)>>&
-getPermuteCallbackList<combinatorial_map::Face<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->cellPermuteCallbackList[2];
-}
-template <>
-inline std::list<std::function<void(const std::vector<size_t>&)>>&
-getPermuteCallbackList<combinatorial_map::Face<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->cellPermuteCallbackList[2];
-}
-template <>
-inline std::list<std::function<void(const std::vector<size_t>&)>>&
-getPermuteCallbackList<combinatorial_map::Cell<3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->cellPermuteCallbackList[3];
-}
-template <>
-inline std::list<std::function<void(const std::vector<size_t>&)>>&
-getPermuteCallbackList<combinatorial_map::Dart<2>>(combinatorial_map::CombinatorialMap<2>* mesh) {
-  return mesh->dartPermuteCallbackList;
-}
-template <>
-inline std::list<std::function<void(const std::vector<size_t>&)>>&
-getPermuteCallbackList<combinatorial_map::Dart<3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  return mesh->dartPermuteCallbackList;
-}
-
-// TODO: add the rest
-template <>
-inline std::list<std::function<void(size_t)>>&
-getExpandCallbackList<combinatorial_map::Incidence<0, 2, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(0, 2);
-  return mesh->incidenceExpandCallbackList[std::make_pair(0, 2)];
-}
-template <>
-inline std::list<std::function<void(size_t)>>&
-getExpandCallbackList<combinatorial_map::Incidence<1, 2, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(1, 2);
-  return mesh->incidenceExpandCallbackList[std::make_pair(1, 2)];
-}
-template <>
-inline std::list<std::function<void(size_t)>>&
-getExpandCallbackList<combinatorial_map::Incidence<0, 3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(0, 3);
-  return mesh->incidenceExpandCallbackList[std::make_pair(0, 3)];
-}
-template <>
-inline std::list<std::function<void(size_t)>>&
-getExpandCallbackList<combinatorial_map::Incidence<1, 3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(1, 3);
-  return mesh->incidenceExpandCallbackList[std::make_pair(1, 3)];
-}
-template <>
-inline std::list<std::function<void(size_t)>>&
-getExpandCallbackList<combinatorial_map::Incidence<2, 3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(2, 3);
-  return mesh->incidenceExpandCallbackList[std::make_pair(2, 3)];
-}
-template <>
-inline std::list<std::function<void(const std::vector<size_t>&)>>&
-getPermuteCallbackList<combinatorial_map::Incidence<0, 2, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(0, 2);
-  return mesh->incidencePermuteCallbackList[std::make_pair(0, 2)];
-}
-template <>
-inline std::list<std::function<void(const std::vector<size_t>&)>>&
-getPermuteCallbackList<combinatorial_map::Incidence<1, 2, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(1, 2);
-  return mesh->incidencePermuteCallbackList[std::make_pair(1, 2)];
-}
-template <>
-inline std::list<std::function<void(const std::vector<size_t>&)>>&
-getPermuteCallbackList<combinatorial_map::Incidence<0, 3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(0, 3);
-  return mesh->incidencePermuteCallbackList[std::make_pair(0, 3)];
-}
-template <>
-inline std::list<std::function<void(const std::vector<size_t>&)>>&
-getPermuteCallbackList<combinatorial_map::Incidence<1, 3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(1, 3);
-  return mesh->incidencePermuteCallbackList[std::make_pair(1, 3)];
-}
-template <>
-inline std::list<std::function<void(const std::vector<size_t>&)>>&
-getPermuteCallbackList<combinatorial_map::Incidence<2, 3, 3>>(combinatorial_map::CombinatorialMap<3>* mesh) {
-  mesh->ensureHaveIncidences(2, 3);
-  return mesh->incidencePermuteCallbackList[std::make_pair(2, 3)];
-}
-
-// template <size_t D>
-// inline size_t elementCapacity<combinatorial_map::Vertex<D>>(combinatorial_map::CombinatorialMap<D>* mesh) {
-//   return mesh->nVerticesCapacity();
-// }
-
-// template <size_t D>
-// inline size_t elementCapacity<combinatorial_map::Dart<D>>(combinatorial_map::CombinatorialMap<D>* mesh) {
-//   return mesh->nDartsCapacity();
-// }
+#undef GC_CM_SPECIALIZE_CELL
+#undef GC_CM_SPECIALIZE_DART
+#undef GC_CM_SPECIALIZE_INCIDENCE
 
 } // namespace geometrycentral
