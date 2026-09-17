@@ -22,6 +22,55 @@ inline int popcount(uint32_t x) {
 namespace geometrycentral {
 namespace combinatorial_map {
 
+// A set of size_t indices (dart or cell indices), used to track "already
+// visited" during the orbit-walk traversals below. Most orbits are small
+// (a handful of darts around a vertex, say), where a flat linear scan is
+// fast and cache-friendly -- faster than a hash set, which would need to
+// touch memory scattered across a table. But a single cell's orbit can
+// occasionally be large (a product mesh's per-vertex orbit can run into the
+// thousands at higher dimensions, even when the mesh as a whole is small),
+// and a linear scan makes a traversal of m darts cost O(m^2) in that case.
+// This starts as a flat scan, exactly matching prior behavior/performance
+// for the common small case, and transparently promotes to a hash set once
+// it grows past kSmallCapacity, so a rare large orbit doesn't blow up.
+class SmallIndexSet {
+public:
+  // Inserts x if not already present. Returns true if x was newly inserted
+  // (i.e. mirrors the "not found, so insert" check this replaces).
+  bool insert(size_t x) {
+    if (contains(x)) return false;
+    if (!usingSet && small.size() >= kSmallCapacity) promote();
+    if (usingSet) {
+      bigSet.insert(x);
+    } else {
+      small.push_back(x);
+    }
+    return true;
+  }
+
+  bool contains(size_t x) const {
+    if (usingSet) return bigSet.find(x) != bigSet.end();
+    for (size_t v : small) {
+      if (v == x) return true;
+    }
+    return false;
+  }
+
+private:
+  static constexpr size_t kSmallCapacity = 32;
+
+  void promote() {
+    bigSet.insert(small.begin(), small.end());
+    small.clear();
+    small.shrink_to_fit();
+    usingSet = true;
+  }
+
+  bool usingSet = false;
+  std::vector<size_t> small;
+  std::unordered_set<size_t> bigSet;
+};
+
 template <size_t D>
 CombinatorialMap<D>::CombinatorialMap() {}
 
@@ -61,10 +110,12 @@ std::vector<Dart<D>> CombinatorialMap<D>::adjacentDarts(Cell<k, D> cell) const {
   // to find all adjacent darts, we express the input cell as an orbit of dart maps,
   std::vector<Dart<D>> neighbors;
   neighbors.reserve(16); // reserve some amount of space
+  SmallIndexSet seen;
 
   std::deque<Dart<D>> dartsToVisit;
   dartsToVisit.push_back(cell.dart());
   neighbors.push_back(cell.dart());
+  seen.insert(cell.dart().getIndex());
 
   while (!dartsToVisit.empty()) {
     // for some reason, iterating in DFS order is important for orienting cells
@@ -72,7 +123,7 @@ std::vector<Dart<D>> CombinatorialMap<D>::adjacentDarts(Cell<k, D> cell) const {
     dartsToVisit.pop_back();
 
     for (std::pair<Dart<D>, bool> n : orbitNeighbors(curr, k)) {
-      if (std::find(neighbors.begin(), neighbors.end(), n.first) == neighbors.end()) {
+      if (seen.insert(n.first.getIndex())) {
         neighbors.push_back(n.first);
         dartsToVisit.push_back(n.first);
       }
@@ -88,10 +139,12 @@ std::vector<Dart<D>> CombinatorialMap<D>::adjacentDarts(Incidence<k1, k2, D> inc
   // to find all adjacent darts, we express the input cell as an orbit of dart maps,
   std::vector<Dart<D>> neighbors;
   neighbors.reserve(16); // reserve some amount of space
+  SmallIndexSet seen;
 
   std::deque<Dart<D>> dartsToVisit;
   dartsToVisit.push_back(incidence.dart());
   neighbors.push_back(incidence.dart());
+  seen.insert(incidence.dart().getIndex());
 
   while (!dartsToVisit.empty()) {
     // for some reason, iterating in DFS order is important for orienting cells
@@ -99,7 +152,7 @@ std::vector<Dart<D>> CombinatorialMap<D>::adjacentDarts(Incidence<k1, k2, D> inc
     dartsToVisit.pop_back();
 
     for (Dart<D> n : incidenceNeighboringDarts(curr, k1, k2)) {
-      if (std::find(neighbors.begin(), neighbors.end(), n) == neighbors.end()) {
+      if (seen.insert(n.getIndex())) {
         neighbors.push_back(n);
         dartsToVisit.push_back(n);
       }
@@ -118,13 +171,13 @@ std::vector<Cell<k2, D>> CombinatorialMap<D>::adjacentCells(Cell<k1, D> cell) co
   // to find all adjacent k2-cells, we express the input cell as an orbit of dart maps,
   // and call d.cell<k2>() for each of these darts
   std::vector<Cell<k2, D>> neighbors;
-  std::vector<Dart<D>> seenDarts;
-  neighbors.reserve(8);  // reserve some amount of space
-  seenDarts.reserve(16); // reserve some amount of space
+  neighbors.reserve(8); // reserve some amount of space
+  SmallIndexSet seenNeighborCells;
+  SmallIndexSet seenDarts;
 
   std::deque<std::pair<Dart<D>, bool>> dartsToVisit;
   dartsToVisit.push_back(std::make_pair(cell.dart(), cell.orientation()));
-  seenDarts.push_back(cell.dart());
+  seenDarts.insert(cell.dart().getIndex());
 
   while (!dartsToVisit.empty()) {
     // for some reason, iterating in DFS order is important for orienting cells
@@ -134,15 +187,31 @@ std::vector<Cell<k2, D>> CombinatorialMap<D>::adjacentCells(Cell<k1, D> cell) co
     dartsToVisit.pop_back();
 
     Cell<k2, D> currCell = currDart.template cell<k2>();
-    currCell.setOrientation(currCell.orientation() == currOrientation);
-    if (std::find(neighbors.begin(), neighbors.end(), currCell) == neighbors.end()) {
+    // currCell was just constructed from dCellSgn[k2][currDart], the raw
+    // per-dart canonical sign of whichever dart the traversal happened to
+    // reach it through -- not yet a meaningful cell-level orientation.
+    // The DFS below propagates `currOrientation` by asking, at each step,
+    // whether moving to a neighboring dart within the k1-cell's own orbit
+    // preserves or reverses orientation. Combined with dCellSgn, that's
+    // exactly the right computation when relating a k1-cell to its
+    // immediate (k1 +/- 1)-neighbors (genuine boundary/coboundary sign), but
+    // it isn't a meaningful question at all for any other k2 -- the result
+    // there would just be an artifact of which dart the DFS happened to
+    // reach that cell through first, not a real property of the k2-cell.
+    // So only apply it when k1 and k2 are immediate neighbors; otherwise
+    // report the standard positive orientation.
+    if ((k1 > k2 ? k1 - k2 : k2 - k1) == 1) {
+      currCell.setOrientation(currCell.orientation() == currOrientation);
+    } else {
+      currCell.setOrientation(true);
+    }
+    if (seenNeighborCells.insert(currCell.getIndex())) {
       neighbors.push_back(currCell);
     }
 
     for (std::pair<Dart<D>, bool> n : orbitNeighbors(currDart, k1)) {
-      if (std::find(seenDarts.begin(), seenDarts.end(), n.first) == seenDarts.end()) {
+      if (seenDarts.insert(n.first.getIndex())) {
         dartsToVisit.push_back(std::make_pair(n.first, currOrientation == n.second));
-        seenDarts.push_back(n.first);
       }
     }
   }
@@ -155,13 +224,13 @@ template <size_t k1, size_t k2, size_t k>
 std::vector<Cell<k, D>> CombinatorialMap<D>::adjacentCells(Incidence<k1, k2, D> incidence) const {
   // to find all adjacent darts, we express the input cell as an orbit of dart maps,
   std::vector<Cell<k, D>> neighbors;
-  std::vector<Dart<D>> seenDarts;
   neighbors.reserve(16); // reserve some amount of space
-  seenDarts.reserve(16); // reserve some amount of space
+  SmallIndexSet seenNeighborCells;
+  SmallIndexSet seenDarts;
 
   std::deque<Dart<D>> dartsToVisit;
   dartsToVisit.push_back(incidence.dart());
-  seenDarts.push_back(incidence.dart());
+  seenDarts.insert(incidence.dart().getIndex());
 
   while (!dartsToVisit.empty()) {
     // for some reason, iterating in DFS order is important for orienting cells
@@ -169,21 +238,20 @@ std::vector<Cell<k, D>> CombinatorialMap<D>::adjacentCells(Incidence<k1, k2, D> 
     dartsToVisit.pop_back();
 
     Cell<k, D> currCell = curr.template cell<k>();
-    if (std::find(neighbors.begin(), neighbors.end(), currCell) == neighbors.end()) {
+    if (seenNeighborCells.insert(currCell.getIndex())) {
       neighbors.push_back(currCell);
     }
 
     for (Dart<D> n : incidenceNeighboringDarts(curr, k1, k2)) {
-      if (std::find(seenDarts.begin(), seenDarts.end(), n) == seenDarts.end()) {
+      if (seenDarts.insert(n.getIndex())) {
         dartsToVisit.push_back(n);
-        seenDarts.push_back(n);
       }
     }
   }
 
   if (k == 0 && k1 == 1) { // since we don't use implicit twin, this one case of the tip vertex of a wedge can be missed
     Cell<k, D> tipVertex = incidence.dart().next().template cell<k>();
-    if (std::find(neighbors.begin(), neighbors.end(), tipVertex) == neighbors.end()) neighbors.push_back(tipVertex);
+    if (seenNeighborCells.insert(tipVertex.getIndex())) neighbors.push_back(tipVertex);
   }
   return neighbors;
 }
@@ -215,12 +283,11 @@ Dart<D> CombinatorialMap<D>::adjacentDartInCell(Cell<k1, D> c1, Cell<k2, D> c2) 
 
   // to find all adjacent k2-cells, we express the input cell as an orbit of dart maps,
   // and call d.cell<k2>() for each of these darts
-  std::vector<Dart<D>> seenDarts;
-  seenDarts.reserve(16); // reserve some amount of space
+  SmallIndexSet seenDarts;
 
   std::deque<Dart<D>> dartsToVisit;
   dartsToVisit.push_back(c1.dart());
-  seenDarts.push_back(c1.dart());
+  seenDarts.insert(c1.dart().getIndex());
 
   while (!dartsToVisit.empty()) {
     Dart<D> currDart = dartsToVisit.back();
@@ -229,9 +296,8 @@ Dart<D> CombinatorialMap<D>::adjacentDartInCell(Cell<k1, D> c1, Cell<k2, D> c2) 
     if (currDart.template cell<k2>() == c2) return currDart;
 
     for (std::pair<Dart<D>, bool> n : orbitNeighbors(currDart, k1)) {
-      if (std::find(seenDarts.begin(), seenDarts.end(), n.first) == seenDarts.end()) {
+      if (seenDarts.insert(n.first.getIndex())) {
         dartsToVisit.push_back(n.first);
-        seenDarts.push_back(n.first);
       }
     }
   }
@@ -253,13 +319,13 @@ std::vector<OrderedIncidence<k1, k2, D>> CombinatorialMap<D>::adjacentIncidences
   // to find all adjacent k2-cells, we express the input cell as an orbit of dart maps,
   // and call d.cell<k2>() for each of these darts
   std::vector<OrderedIncidence<k1, k2, D>> neighbors;
-  std::vector<Dart<D>> seenDarts;
-  neighbors.reserve(8);  // reserve some amount of space
-  seenDarts.reserve(16); // reserve some amount of space
+  neighbors.reserve(8); // reserve some amount of space
+  SmallIndexSet seenNeighborIncidences;
+  SmallIndexSet seenDarts;
 
   std::deque<std::pair<Dart<D>, bool>> dartsToVisit;
   dartsToVisit.push_back(std::make_pair(cell.dart(), true));
-  seenDarts.push_back(cell.dart());
+  seenDarts.insert(cell.dart().getIndex());
 
   while (!dartsToVisit.empty()) {
     // for some reason, iterating in DFS order is important for orienting cells
@@ -271,14 +337,13 @@ std::vector<OrderedIncidence<k1, k2, D>> CombinatorialMap<D>::adjacentIncidences
     Cell<k2, D> currCell = currDart.template cell<k2>();
     currCell.setOrientation(currCell.orientation() == currOrientation);
     OrderedIncidence<k1, k2, D> neighbor(this, dIncidenceArr[key][currDart.getIndex()]);
-    if (std::find(neighbors.begin(), neighbors.end(), neighbor) == neighbors.end()) {
+    if (seenNeighborIncidences.insert(neighbor.getIndex())) {
       neighbors.push_back(neighbor);
     }
 
     for (std::pair<Dart<D>, bool> n : orbitNeighbors(currDart, k1)) {
-      if (std::find(seenDarts.begin(), seenDarts.end(), n.first) == seenDarts.end()) {
+      if (seenDarts.insert(n.first.getIndex())) {
         dartsToVisit.push_back(std::make_pair(n.first, currOrientation == n.second));
-        seenDarts.push_back(n.first);
       }
     }
   }
