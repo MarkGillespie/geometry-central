@@ -838,14 +838,39 @@ SparseMatrix<int> CombinatorialMap<D>::getBoundaryMatrix() {
   static_assert(k > 0, "Boundary_0 matrix not defined");
   static_assert(k <= D, "Boundary_k matrix not defined for k > complex dimension D");
 
-  std::vector<Eigen::Triplet<int>> triplets;
-
   CellData<k, D, size_t> kIndices = getCellIndices<k>();
   CellData<k - 1, D, size_t> bdyIndices = getCellIndices<k - 1>();
 
-  for (Cell<k, D> cell : cells<k>()) {
-    for (Cell<k - 1, D> bdyCell : cell.template adjacentCells<k - 1>()) {
-      triplets.emplace_back(bdyIndices[bdyCell], kIndices[cell], bdyCell.sign());
+  // A single flat pass over every dart, rather than walking each k-cell's
+  // own orbit individually (the previous implementation): dCellArr[k][d]
+  // and dCellArr[k-1][d] (read here via d.cell<k>()/d.cell<k-1>()) already
+  // give the (k-cell, (k-1)-cell) pair a dart witnesses in O(1), and
+  // dCellSgn[k][d] == dCellSgn[k-1][d] gives the correct boundary sign for
+  // that pair directly. This is the same fact Cell::orientationInCell
+  // relies on -- its formula reduces to exactly this comparison once both
+  // cells are taken with their own canonical/positive orientation, which is
+  // what getCellIndices()'s cells are -- so there's no need to re-derive it
+  // via a per-cell orbit walk plus an adjacentDartInCell() search.
+  //
+  // Multiple darts of the same k-cell can witness the same (k-1)-facet
+  // (e.g. several corner darts of a tetrahedron on the same face all have
+  // the same dCellArr[k-1]), so a (bdyIdx, cellIdx) pair may come up more
+  // than once; dedup via seenPairs to emit exactly one triplet per genuine
+  // incidence -- Eigen sums duplicate triplets at the same (row, col),
+  // which would otherwise multiply the sign by however many darts happened
+  // to witness it.
+  std::vector<Eigen::Triplet<int>> triplets;
+  std::unordered_set<size_t> seenPairs;
+  const size_t nBdy = nCells<k - 1>();
+
+  for (Dart<D> d : darts()) {
+    Cell<k, D> cell = d.template cell<k>();
+    Cell<k - 1, D> bdyCell = d.template cell<k - 1>();
+    size_t cellIdx = kIndices[cell];
+    size_t bdyIdx = bdyIndices[bdyCell];
+    if (seenPairs.insert(bdyIdx + nBdy * cellIdx).second) {
+      int sign = (dCellSgn[k][d.getIndex()] == dCellSgn[k - 1][d.getIndex()]) ? 1 : -1;
+      triplets.emplace_back(bdyIdx, cellIdx, sign);
     }
   }
 
